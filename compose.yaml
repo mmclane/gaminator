@@ -1,0 +1,11 @@
+name: gaminator
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    stop_grace_period: 15s
+    env_file: .env
+    volumes:
+      - botdata:/data
+volumes:
+  botdata:

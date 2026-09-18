@@ -1,0 +1,83 @@
+# Prompts for Imposter. Every player except the imposters gets the prompt by DM.
+# `hint` is optional and is the only clue the imposters get. Plain strings work too.
+prompts:
+  - prompt: Describe your ideal weekend without using the words "relax" or "sleep".
+    hint: It's about free time.
+  - prompt: Name a food you could happily eat every single day.
+    hint: It's about food.
+  - prompt: What's the last thing you searched for online? Be honest, or be convincing.
+    hint: It's about the internet.
+  - prompt: Post exactly one emoji that sums up your morning.
+    hint: You need to answer with a single emoji.
+  - prompt: Describe the plot of a famous movie in one sentence without naming any character or the title.
+    hint: It's about a movie.
+  - prompt: What is your most controversial pizza topping opinion?
+    hint: It's about food.
+  - prompt: Tell us about a skill you'd learn instantly if you could.
+    hint: It's about wishes.
+  - prompt: Name a song you'd put on to get pumped up, and say why in five words or fewer.
+    hint: It's about music.
+  - prompt: In three words, describe how you feel about mornings.
+    hint: Answer in exactly three words.
+  - prompt: What's a household chore you secretly enjoy?
+    hint: It's about home life.
+  - prompt: Give the group a two-word title for your autobiography.
+    hint: Answer in exactly two words.
+  - prompt: Recommend a place to visit and one thing to do there, without naming the country.
+    hint: It's about travel.
+  - prompt: What would you name a pet goldfish? Explain your choice.
+    hint: It's about naming something.
+  - prompt: Tell us the most useless fact you know.
+    hint: It's about trivia.
+  - prompt: Describe your dream job in the style of a job listing.
+    hint: It's about work.
+  - prompt: Which fictional character would be the worst roommate, and why?
+    hint: It's about fictional characters.
+  - prompt: Share the first thing you'd buy if you won a small lottery prize.
+    hint: It's about money.
+  - prompt: Describe a smell you love without saying what it is.
+    hint: It's about the senses.
+  - prompt: Name something you always take on a trip that most people don't.
+    hint: It's about travel.
+  - prompt: Rate your cooking on a scale of one to ten and defend the number.
+    hint: Answer with a number and a reason.
+  - prompt: What was your favorite cartoon as a kid?
+    hint: It's about childhood.
+  - prompt: Invent a holiday and tell us how it's celebrated.
+    hint: It's about celebrations.
+  - prompt: Which season would you delete from the calendar?
+    hint: It's about weather or seasons.
+  - prompt: Describe the view from your window right now in one sentence.
+    hint: It's about your surroundings.
+  - prompt: Tell us about a board game or video game you're unbeatable at.
+    hint: It's about games.
+  - prompt: What is the best sandwich, and what makes it the best?
+    hint: It's about food.
+  - prompt: Give one piece of advice you'd send back to yourself ten years ago.
+    hint: It's about the past.
+  - prompt: Name a superpower that sounds great but would be annoying to have.
+    hint: It's about superpowers.
+  - prompt: Post a word that you think is fun to say out loud.
+    hint: Answer with a single word.
+  - prompt: Describe your phone's wallpaper without posting it.
+    hint: It's about your phone.
+  - prompt: What is one thing on your bucket list?
+    hint: It's about goals.
+  - prompt: Tell us about a snack combination that others find weird.
+    hint: It's about food.
+  - prompt: If you had to give a TED talk with no preparation, what would it be about?
+    hint: It's about a talk or presentation.
+  - prompt: Which animal best represents your personality? Explain.
+    hint: It's about animals.
+  - prompt: Describe the last thing that made you laugh out loud.
+    hint: It's about humor.
+  - prompt: Name a movie or show everyone loves that you couldn't get into.
+    hint: It's about TV or movies.
+  - prompt: What time do you think is the ideal bedtime? Defend it.
+    hint: It's about sleep.
+  - prompt: Tell us your go-to karaoke song, or the one you'd pick if forced.
+    hint: It's about music.
+  - prompt: Describe your perfect breakfast in one line.
+    hint: It's about food.
+  - prompt: What's a small thing that instantly improves your day?
+    hint: It's about happiness.
