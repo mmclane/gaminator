@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS assassin_games (
   inactivity_hours INTEGER NOT NULL DEFAULT 24,
   max_wrong_reports INTEGER NOT NULL DEFAULT 3,
   reveal_killer INTEGER NOT NULL DEFAULT 1,
+  -- Per-game channels. Announce falls back to the server-wide /gaminator announce channel;
+  -- the mod channel gets a fully detailed organizer feed and is silent when unset.
+  announce_channel_id INTEGER,
+  mod_channel_id INTEGER,
   winner_id INTEGER,
   created_by INTEGER NOT NULL,
   created_at TEXT NOT NULL,

@@ -21,7 +21,7 @@ def make_context(db: Database, settings: Settings) -> AssassinContext:
 
 
 async def migrate(db: Database) -> None:
-    """Fold the old separate poison and trap reactions into the single kill emoji."""
+    """Fold the old poison/trap reactions into one kill emoji; add per-game channel columns."""
     if "assassin_games" not in await db.table_names():
         return
     async with db.conn.execute("PRAGMA table_info(assassin_games)") as cur:
@@ -33,6 +33,10 @@ async def migrate(db: Database) -> None:
             "ALTER TABLE assassin_games DROP COLUMN poison_emoji;"
             "ALTER TABLE assassin_games DROP COLUMN trap_emoji;"
         )
+    for column in ("announce_channel_id", "mod_channel_id"):
+        if column not in columns:
+            log.info("assassin: adding %s column", column)
+            await db.conn.executescript(f"ALTER TABLE assassin_games ADD COLUMN {column} INTEGER;")
 
 
 SPEC = GameSpec(

@@ -75,6 +75,12 @@ async def test_settings_and_channels(repo, game):
     await repo.update_settings(game["id"], inactivity_hours=5, reveal_killer=0)
     g = await repo.get_game(game["id"])
     assert g["inactivity_hours"] == 5 and g["reveal_killer"] == 0
+    await repo.update_settings(game["id"], announce_channel_id=6, mod_channel_id=5)
+    g = await repo.get_game(game["id"])
+    assert g["announce_channel_id"] == 6 and g["mod_channel_id"] == 5
+    await repo.update_settings(game["id"], mod_channel_id=None)
+    g = await repo.get_game(game["id"])
+    assert g["mod_channel_id"] is None and g["announce_channel_id"] == 6
     with pytest.raises(ValueError):
         await repo.update_settings(game["id"], status="finished")
     await repo.add_channel(game["id"], 100)
@@ -138,5 +144,7 @@ async def test_migration_merges_trigger_emoji(tmp_path):
     await prepare_database(database)
     game = await AssassinRepo(database).get_current_game(1)
     assert game["kill_emoji"] == "💀"  # the old poison reaction becomes the single trigger
+    # Columns added later are created on old databases too.
+    assert game["announce_channel_id"] is None and game["mod_channel_id"] is None
     assert "trap_emoji" not in game.keys()  # noqa: SIM118  (Row, not a dict)
     await database.close()

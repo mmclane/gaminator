@@ -7,7 +7,7 @@ import logging
 import discord
 from discord import app_commands
 
-from ....core.messaging import announce, display_name, dm
+from ....core.messaging import display_name, dm
 from ....core.repo import AlreadyJoined
 from ....core.util import (
     GameError,
@@ -19,6 +19,7 @@ from ....core.util import (
 )
 from ..services.game import (
     DEFAULT_GAME,
+    announce_game,
     eliminate_player,
     inactivity_deadline,
     required_players,
@@ -61,9 +62,9 @@ async def join(interaction: discord.Interaction):
         )
     await respond(interaction, text)
     name = await display_name(interaction.client, game["guild_id"], interaction.user.id)
-    await announce(
+    await announce_game(
         interaction.client,
-        game["guild_id"],
+        game,
         f"🙋 **{name}** joined {title(game)}. {signup_text(count, required_players(interaction.client))}",
     )
 
@@ -77,9 +78,9 @@ async def leave(interaction: discord.Interaction):
         await repo.delete_player(player["id"])
         count = await repo.alive_count(game["id"])
         name = await display_name(interaction.client, game["guild_id"], interaction.user.id)
-        await announce(
+        await announce_game(
             interaction.client,
-            game["guild_id"],
+            game,
             f"🚪 **{name}** left {title(game)}. {signup_text(count, required_players(interaction.client))}",
         )
     else:

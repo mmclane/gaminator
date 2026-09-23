@@ -44,19 +44,25 @@ async def dm(bot, user_id: int, content: str | None = None, **kwargs) -> bool:
         return False
 
 
-async def announce(bot, guild_id: int, text: str) -> None:
-    """Post in the server's announce channel, if one is configured."""
-    channel_id = await bot.guild_settings.get_announce_channel(guild_id)
-    if not channel_id:
-        return
+async def post_to_channel(bot, channel_id: int, text: str) -> bool:
+    """Post ``text`` in a channel by id. False (with a warning logged) when it can't."""
     channel = bot.get_channel(channel_id)
     if channel is None:
         try:
             channel = await bot.fetch_channel(channel_id)
-        except discord.HTTPException:
-            log.warning("announce channel %s not found for guild %s", channel_id, guild_id)
-            return
+        except NETWORK_ERRORS:
+            log.warning("channel %s not found or not readable", channel_id)
+            return False
     try:
         await channel.send(text, allowed_mentions=NO_MENTIONS)
-    except discord.HTTPException as e:
-        log.warning("could not announce in %s: %s", channel_id, e)
+        return True
+    except NETWORK_ERRORS as e:
+        log.warning("could not post in %s: %s", channel_id, e)
+        return False
+
+
+async def announce(bot, guild_id: int, text: str) -> None:
+    """Post in the server's announce channel, if one is configured."""
+    channel_id = await bot.guild_settings.get_announce_channel(guild_id)
+    if channel_id:
+        await post_to_channel(bot, channel_id, text)

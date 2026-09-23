@@ -4,6 +4,7 @@ from gaminator.games.assassin.services.game import (
     bounty_due,
     elimination_text,
     is_inactive,
+    mod_elimination_text,
     needs_warning,
     rules_text,
 )
@@ -31,6 +32,26 @@ def test_elimination_text_reveal_toggle():
     trap = elimination_text(GAME, "Ann", "Bob", "trap", "coffee", 3)
     assert "trap" in trap and "coffee" in trap
     assert "bounty" in elimination_text(GAME, "Ann", "Bob", "quickdraw", "bounty", 3).lower()
+
+
+def test_mod_elimination_text_always_names_killer():
+    hidden = {**GAME, "reveal_killer": 0}
+    assert "Bob" not in elimination_text(hidden, "Ann", "Bob", "poison", "banana", 5)
+    text = mod_elimination_text(hidden, "Ann", "Bob", "poison", "banana", 5, "Bob", "Cid")
+    assert "Ann" in text and "Bob" in text and "banana" in text and "5 players remain" in text
+    assert "**Bob** now hunts **Cid**" in text
+
+
+def test_mod_elimination_text_hunter_line_and_details():
+    no_hunter = mod_elimination_text(GAME, "Ann", None, "inactive", None, 2, None, None)
+    assert "hunts" not in no_hunter and "going quiet" in no_hunter
+    no_target = mod_elimination_text(GAME, "Ann", "Bob", "quickdraw", "bounty", 1, "Bob", None)
+    assert "hunts" not in no_target and "bounty" in no_target.lower()
+    assert "remain" not in no_target
+    executed = mod_elimination_text(GAME, "Ann", None, "executed", "cheating", 4, "Dee", "Eve")
+    assert "cheating" in executed and "**Dee** now hunts **Eve**" in executed
+    trap = mod_elimination_text(GAME, "Ann", "Bob", "trap", "coffee", 3, "Bob", "Cid")
+    assert "coffee" in trap and "Bob" in trap
 
 
 def test_rules_mentions_settings():

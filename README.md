@@ -54,7 +54,9 @@ groups *visible* to the role under **Server Settings > Integrations > Gaminator 
 (Discord decides who can see a command; the bot decides who can run it).
 
 - `/gaminator announce channel:#games` chooses where every game posts its announcements
-  (eliminations, winners, and a pointer to new games created in other channels).
+  (eliminations, winners, and a pointer to new games created in other channels). An Assassin
+  game can override this for its own announcements with `/assassin-admin settings
+  announce_channel:#assassin`.
 - `/gaminator status` shows which games are running right now.
 
 ## 4. Assassin
@@ -91,6 +93,11 @@ When a player is eliminated, the bot DMs them, DMs the hunter their new target a
 poison word, and posts an announcement in the announce channel. By default the announcement
 names the killer; turn that off with `/assassin-admin settings reveal_killer:False`.
 
+**Mod channel** 🔒: set `/assassin-admin settings mod_channel:#assassin-mods` and organizers
+get a private feed: every elimination with the killer always named (whatever `reveal_killer`
+says), the poison or bait word involved, and who now hunts whom, plus bounties and the end of
+the game. Make the channel visible only to organizers; the bot just needs to post there.
+
 Failed attempts on your own target (wrong word, shielded, too slow) get you a private DM
 explaining why, and the bot removes the reaction if it can. Reactions on anyone else's messages
 are ignored silently.
@@ -112,6 +119,10 @@ unless a server admin has opened it to the role set with `/gaminator admin-role`
 2. `/assassin-admin settings` shows the defaults. Change any of them any time:
    `inactivity_hours`, `bounty_hours`, `max_wrong_reports`, `reveal_killer`, `kill_emoji`,
    `shield_emoji`. Custom server emoji work: paste them as you would in a message.
+   `announce_channel` sends this game's public announcements (joins, eliminations, bounties,
+   winner) to a channel of its own instead of the server-wide `/gaminator announce` channel;
+   `mod_channel` adds the organizer feed described above. `clear_channel:announce|mod|both`
+   unsets them.
 3. Optional: `/assassin-admin channels action:add channel:#general` to limit the game to
    specific channels. With no channels listed, every channel the bot can read counts, threads
    included. `action:list`, `action:remove`, and `action:clear` manage the list.

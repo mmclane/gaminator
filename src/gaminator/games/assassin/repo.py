@@ -26,6 +26,8 @@ SETTING_COLUMNS = (
     "inactivity_hours",
     "max_wrong_reports",
     "reveal_killer",
+    "announce_channel_id",
+    "mod_channel_id",
 )
 
 

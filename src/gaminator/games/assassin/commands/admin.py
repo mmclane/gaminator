@@ -26,8 +26,10 @@ from ..repo import SETTING_COLUMNS
 from ..services.chain import build_assignments
 from ..services.game import (
     RNG,
+    announce_game,
     eliminate_player,
     intro_text,
+    notify_mods,
     required_players,
     send_assignment,
     title,
@@ -45,8 +47,32 @@ def format_settings(game) -> str:
         f"{' hours' if game['bounty_hours'] else ''}\n"
         f"Inactivity limit: {game['inactivity_hours']} hours\n"
         f"Wrong reports allowed: {game['max_wrong_reports']}\n"
-        f"Reveal killer in announcements: {'yes' if game['reveal_killer'] else 'no'}"
+        f"Reveal killer in announcements: {'yes' if game['reveal_killer'] else 'no'}\n"
+        f"Announce channel: {channel_label(game['announce_channel_id'], 'server default (`/gaminator announce`)')}\n"
+        f"Mod channel: {channel_label(game['mod_channel_id'], 'not set')}"
     )
+
+
+def channel_label(channel_id: int | None, fallback: str) -> str:
+    return f"<#{channel_id}>" if channel_id else fallback
+
+
+def check_can_post(channel: discord.abc.GuildChannel, interaction: discord.Interaction) -> None:
+    """Refuse a channel the bot can't post in, before saving it as an announce/mod channel."""
+    me = interaction.guild.me if interaction.guild else None
+    if me is None or not hasattr(channel, "permissions_for"):
+        return
+    perms = channel.permissions_for(me)
+    missing = [
+        label
+        for attr, label in (("view_channel", "View Channel"), ("send_messages", "Send Messages"))
+        if not getattr(perms, attr)
+    ]
+    if missing:
+        raise GameError(
+            f"I can't post in {channel.mention} (missing: {', '.join(missing)}). Give my role "
+            "access there first."
+        )
 
 
 # -- lifecycle -------------------------------------------------------------------------------
@@ -64,7 +90,8 @@ async def create(interaction: discord.Interaction, name: str = "Assassin"):
     await interaction.response.send_message(intro_text(game), allowed_mentions=NO_MENTIONS)
     await respond(
         interaction,
-        "Organizer notes: check `/assassin-admin settings` and `/gaminator announce`, then "
+        "Organizer notes: check `/assassin-admin settings` (including `announce_channel` and "
+        "`mod_channel`), then "
         f"start with `/assassin-admin start` once at least {required_players(interaction.client)} players have joined.",
     )
     if interaction.channel_id != await interaction.client.guild_settings.get_announce_channel(  # type: ignore[attr-defined]
@@ -110,9 +137,9 @@ async def start(interaction: discord.Interaction):
             "see their target: " + ", ".join(failed)
         )
     await respond(interaction, text)
-    await announce(
+    await announce_game(
         bot,
-        game["guild_id"],
+        game,
         f"🔪 {title(game)} has begun with {len(players)} players. Check your DMs for "
         "your target. Trust no one.",
     )
@@ -128,14 +155,20 @@ async def end(interaction: discord.Interaction):
     winner = alive[0] if len(alive) == 1 and game["status"] == "active" else None
     await repo.finish_game(game["id"], winner["id"] if winner else None)
     await respond(interaction, f"{title(game)} has ended.")
+    organizer = await display_name(bot, game["guild_id"], interaction.user.id)
     if game["status"] == "active":
         names = [await display_name(bot, game["guild_id"], p["user_id"]) for p in alive]
         survivors = ", ".join(f"**{n}**" for n in names) or "nobody"
-        await announce(
+        await announce_game(
             bot,
-            game["guild_id"],
+            game,
             f"🏁 {title(game)} was ended by an organizer. Still standing: {survivors}.",
         )
+        await notify_mods(
+            bot, game, f"🔒 🏁 **{organizer}** ended {title(game)}. Still standing: {survivors}."
+        )
+    else:
+        await notify_mods(bot, game, f"🔒 🏁 **{organizer}** closed {title(game)} during sign-ups.")
 
 
 @admin.command(name="remove", description="Remove a player from the game")
@@ -180,6 +213,9 @@ async def execute(interaction: discord.Interaction, user: discord.User, reason: 
     kill_emoji="Reaction that triggers a kill (poison, trap, or quick draw)",
     shield_emoji="Reaction players put on their own message to protect it",
     bounty_hours="Hours with no elimination before a bounty is placed (0 turns bounties off)",
+    announce_channel="Where this game's public announcements go (default: /gaminator announce)",
+    mod_channel="Organizer-only feed: every elimination with the killer named, bounties, game end",
+    clear_channel="Unset the announce or mod channel",
 )
 async def settings(
     interaction: discord.Interaction,
@@ -189,10 +225,16 @@ async def settings(
     kill_emoji: str | None = None,
     shield_emoji: str | None = None,
     bounty_hours: app_commands.Range[int, 0, 720] | None = None,
+    announce_channel: discord.TextChannel | None = None,
+    mod_channel: discord.TextChannel | None = None,
+    clear_channel: Literal["announce", "mod", "both"] | None = None,
 ):
     await is_game_admin(interaction)
     repo = ctx(interaction).repo
     game = await require_game(repo, interaction.guild_id)
+    for channel in (announce_channel, mod_channel):
+        if channel is not None:
+            check_can_post(channel, interaction)
     changes = {
         "inactivity_hours": inactivity_hours,
         "max_wrong_reports": max_wrong_reports,
@@ -200,8 +242,19 @@ async def settings(
         "kill_emoji": kill_emoji.strip() if kill_emoji else None,
         "shield_emoji": shield_emoji.strip() if shield_emoji else None,
         "bounty_hours": bounty_hours,
+        "announce_channel_id": announce_channel.id if announce_channel else None,
+        "mod_channel_id": mod_channel.id if mod_channel else None,
     }
     changes = {k: v for k, v in changes.items() if v is not None and k in SETTING_COLUMNS}
+    if clear_channel:
+        clears = {
+            "announce": ("announce_channel_id",),
+            "mod": ("mod_channel_id",),
+            "both": ("announce_channel_id", "mod_channel_id"),
+        }[clear_channel]
+        if any(c in changes for c in clears):
+            raise GameError("Pick a channel or clear it, not both.")
+        changes.update({c: None for c in clears})
     if changes.get("kill_emoji", game["kill_emoji"]) == changes.get(
         "shield_emoji", game["shield_emoji"]
     ):

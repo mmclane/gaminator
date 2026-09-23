@@ -6,7 +6,7 @@ import logging
 import random
 from datetime import timedelta
 
-from ....core.messaging import announce, display_name, dm
+from ....core.messaging import announce, display_name, dm, post_to_channel
 from ....core.util import now, parse_iso
 from ..context import context
 from .words import pick_word
@@ -149,6 +149,56 @@ def elimination_text(
     return line + (tail if remaining > 1 else "")
 
 
+def mod_elimination_text(
+    game,
+    victim_name: str,
+    killer_name: str | None,
+    cause: str,
+    detail: str | None,
+    remaining: int,
+    hunter_name: str | None,
+    new_target_name: str | None,
+) -> str:
+    """Organizer feed: like elimination_text but always names the killer and the new pairing."""
+    label = CAUSE_LABELS.get(cause, "eliminated")
+    icons = {
+        "left": "🚪",
+        "poison": "☠️",
+        "quickdraw": "🔪",
+        "trap": "🪤",
+        "arrested": "🚔",
+        "false_reports": "🙈",
+        "inactive": "💤",
+        "executed": "⚖️",
+    }
+    if cause == "left":
+        line = f"**{victim_name}** left the game."
+    else:
+        who = ""
+        if killer_name:
+            who = (
+                f" after **{killer_name}** reported them"
+                if cause == "arrested"
+                else f" by **{killer_name}**"
+            )
+        extra = ""
+        if cause == "poison" and detail:
+            extra = f" (poison word: *{detail}*)"
+        elif cause == "trap" and detail:
+            extra = f" (bait word: *{detail}*)"
+        elif cause == "quickdraw" and detail == "bounty":
+            extra = ". The bounty has been collected"
+        elif cause == "executed" and detail:
+            extra = f". Reason: {detail}"
+        line = f"**{victim_name}** was {label}{who}{extra}."
+    lines = [f"🔒 {icons.get(cause, '💀')} {line}"]
+    if hunter_name and new_target_name:
+        lines.append(f"**{hunter_name}** now hunts **{new_target_name}**.")
+    if remaining > 1:
+        lines.append(f"{remaining} players remain.")
+    return "\n".join(lines)
+
+
 def victim_dm_text(game, cause: str, killer_name: str | None, detail: str | None) -> str:
     if cause == "poison":
         who = f" **{killer_name}**" if killer_name and game["reveal_killer"] else " your assassin"
@@ -224,6 +274,20 @@ def current_words(players) -> set[str]:
 # -- Discord flow ----------------------------------------------------------------------------
 
 
+async def announce_game(bot, game, text: str) -> None:
+    """Public notice: the game's own channel, else the server-wide /gaminator announce channel."""
+    if game["announce_channel_id"]:
+        await post_to_channel(bot, game["announce_channel_id"], text)
+    else:
+        await announce(bot, game["guild_id"], text)
+
+
+async def notify_mods(bot, game, text: str) -> None:
+    """Organizer-only notice. Silent when the game has no mod channel."""
+    if game["mod_channel_id"]:
+        await post_to_channel(bot, game["mod_channel_id"], text)
+
+
 async def send_assignment(bot, game, player) -> bool:
     if not player["target_id"]:
         return False
@@ -266,11 +330,33 @@ async def eliminate_player(bot, game, victim, by_player, cause: str, detail: str
     if hunter is not None and hunter["target_id"]:
         await send_assignment(bot, game, hunter)
 
-    await announce(
-        bot,
-        game["guild_id"],
-        elimination_text(game, victim_name, killer_name, cause, detail, remaining),
+    await announce_game(
+        bot, game, elimination_text(game, victim_name, killer_name, cause, detail, remaining)
     )
+    if game["mod_channel_id"]:
+        hunter_name = new_target_name = None
+        if hunter is not None:
+            hunter_name = await display_name(bot, game["guild_id"], hunter["user_id"])
+            if hunter["target_id"]:
+                new_target = await ctx.repo.get_player_by_id(hunter["target_id"])
+                if new_target is not None:
+                    new_target_name = await display_name(
+                        bot, game["guild_id"], new_target["user_id"]
+                    )
+        await notify_mods(
+            bot,
+            game,
+            mod_elimination_text(
+                game,
+                victim_name,
+                killer_name,
+                cause,
+                detail,
+                remaining,
+                hunter_name,
+                new_target_name,
+            ),
+        )
     await check_win(bot, game)
     return hunter
 
@@ -291,13 +377,13 @@ async def place_bounty(bot, game) -> None:
         f"bounty on you: *anyone* can quick-draw {game['kill_emoji']} your messages until the "
         "next elimination. Shield up and post carefully.",
     )
-    await announce(
-        bot,
-        game["guild_id"],
+    text = (
         f"💰 **Bounty!** Nobody has been eliminated in {game['bounty_hours']} hours. "
         f"**{name}** has gone longest without a kill, so anyone can take them out with a quick "
-        f"draw {game['kill_emoji']} until the next elimination.",
+        f"draw {game['kill_emoji']} until the next elimination."
     )
+    await announce_game(bot, game, text)
+    await notify_mods(bot, game, f"🔒 {text}")
 
 
 async def check_win(bot, game) -> bool:
@@ -318,12 +404,12 @@ async def check_win(bot, game) -> bool:
             winner["user_id"],
             f"# 🏆 You're the last one standing!\nYou win {title(game)}.",
         )
-        await announce(
-            bot,
-            game["guild_id"],
+        text = (
             f"🏆 **{name}** is the last one standing and wins {title(game)} "
-            f"with {winner['kills']} kill{'s' if winner['kills'] != 1 else ''}!",
+            f"with {winner['kills']} kill{'s' if winner['kills'] != 1 else ''}!"
         )
     else:
-        await announce(bot, game["guild_id"], f"{title(game)} is over with no survivors.")
+        text = f"{title(game)} is over with no survivors."
+    await announce_game(bot, game, text)
+    await notify_mods(bot, game, f"🔒 {text}")
     return True
