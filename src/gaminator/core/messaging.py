@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 
+import aiohttp
 import discord
 
 log = logging.getLogger(__name__)
+# Discord's own errors plus transport-level failures (dropped connections, truncated bodies).
+NETWORK_ERRORS = (discord.HTTPException, aiohttp.ClientError)
 NO_MENTIONS = discord.AllowedMentions.none()
 
 
@@ -17,7 +20,7 @@ async def display_name(bot, guild_id: int | None, user_id: int) -> str:
         if member is None:
             try:
                 member = await guild.fetch_member(user_id)
-            except discord.HTTPException:
+            except NETWORK_ERRORS:
                 member = None
         if member is not None:
             return member.display_name
@@ -25,7 +28,7 @@ async def display_name(bot, guild_id: int | None, user_id: int) -> str:
     if user is None:
         try:
             user = await bot.fetch_user(user_id)
-        except discord.HTTPException:
+        except NETWORK_ERRORS:
             return f"<@{user_id}>"
     return user.display_name
 
@@ -36,7 +39,7 @@ async def dm(bot, user_id: int, content: str | None = None, **kwargs) -> bool:
         user = bot.get_user(user_id) or await bot.fetch_user(user_id)
         await user.send(content, allowed_mentions=NO_MENTIONS, **kwargs)
         return True
-    except discord.HTTPException as e:
+    except NETWORK_ERRORS as e:
         log.info("could not DM user %s: %s", user_id, e)
         return False
 

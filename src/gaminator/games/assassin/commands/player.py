@@ -42,6 +42,8 @@ async def join(interaction: discord.Interaction):
         await repo.add_player(game["id"], interaction.user.id)
     except AlreadyJoined:
         raise GameError("You're already in.") from None
+    # The welcome DM and name lookup can take longer than Discord's 3-second window.
+    await interaction.response.defer(ephemeral=True)
     count = await repo.alive_count(game["id"])
     dm_ok = await dm(
         interaction.client,

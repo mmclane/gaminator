@@ -96,7 +96,12 @@ async def start(interaction: discord.Interaction):
     game = await repo.get_game(game["id"])
     failed = []
     for p in await repo.list_players(game["id"]):
-        if not await send_assignment(bot, game, p):
+        try:
+            sent = await send_assignment(bot, game, p)
+        except Exception:  # one bad DM must not abort the rest of the start
+            log.exception("sending assignment to %s failed", p["user_id"])
+            sent = False
+        if not sent:
             failed.append(await display_name(bot, game["guild_id"], p["user_id"]))
     text = f"{title(game)} has started with {len(players)} players."
     if failed:
