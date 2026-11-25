@@ -1,7 +1,7 @@
 """Organizer commands: the /imposter-admin group.
 
 Discord hides the group from members without Manage Server. Every command also checks
-``is_game_admin`` at run time so the role set with ``/gaminator admin-role`` works once a
+``is_game_admin`` at run time so the role set with ``/gaminator-admin admin-role`` works once a
 server admin makes the group visible to that role under Integrations.
 """
 

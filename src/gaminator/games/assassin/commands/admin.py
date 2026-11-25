@@ -1,7 +1,7 @@
 """Organizer commands: the /assassin-admin group.
 
 Discord hides the group from members without Manage Server. Every command also checks
-``is_game_admin`` at run time so the role set with ``/gaminator admin-role`` works once a
+``is_game_admin`` at run time so the role set with ``/gaminator-admin admin-role`` works once a
 server admin makes the group visible to that role under Integrations.
 """
 
@@ -48,7 +48,7 @@ def format_settings(game) -> str:
         f"Inactivity limit: {game['inactivity_hours']} hours\n"
         f"Wrong reports allowed: {game['max_wrong_reports']}\n"
         f"Reveal killer in announcements: {'yes' if game['reveal_killer'] else 'no'}\n"
-        f"Announce channel: {channel_label(game['announce_channel_id'], 'server default (`/gaminator announce`)')}\n"
+        f"Announce channel: {channel_label(game['announce_channel_id'], 'server default (`/gaminator-admin announce`)')}\n"
         f"Mod channel: {channel_label(game['mod_channel_id'], 'not set')}"
     )
 
@@ -213,7 +213,7 @@ async def execute(interaction: discord.Interaction, user: discord.User, reason: 
     kill_emoji="Reaction that triggers a kill (poison, trap, or quick draw)",
     shield_emoji="Reaction players put on their own message to protect it",
     bounty_hours="Hours with no elimination before a bounty is placed (0 turns bounties off)",
-    announce_channel="Where this game's public announcements go (default: /gaminator announce)",
+    announce_channel="Where this game's public announcements go (default: /gaminator-admin announce)",
     mod_channel="Organizer-only feed: every elimination with the killer named, bounties, game end",
     clear_channel="Unset the announce or mod channel",
 )

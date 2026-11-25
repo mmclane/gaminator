@@ -275,7 +275,7 @@ def current_words(players) -> set[str]:
 
 
 async def announce_game(bot, game, text: str) -> None:
-    """Public notice: the game's own channel, else the server-wide /gaminator announce channel."""
+    """Public notice: the game's own channel, else the server-wide /gaminator-admin announce channel."""
     if game["announce_channel_id"]:
         await post_to_channel(bot, game["announce_channel_id"], text)
     else:

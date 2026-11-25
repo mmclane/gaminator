@@ -30,6 +30,7 @@ def main() -> None:
     settings = Settings.from_env()
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
     discord.utils.setup_logging(level=level, root=True)
+    logging.getLogger("aiosqlite").setLevel(max(level, logging.INFO))
     asyncio.run(run(settings))
 
 

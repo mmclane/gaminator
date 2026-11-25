@@ -5,9 +5,20 @@ from __future__ import annotations
 from ..core.db import Database
 from ..core.registry import GameSpec
 from .assassin import SPEC as ASSASSIN
+from .fiftyfifty import SPEC as FIFTYFIFTY
+from .headlines import SPEC as HEADLINES
 from .imposter import SPEC as IMPOSTER
+from .mostlikely import SPEC as MOSTLIKELY
+from .spectrum import SPEC as SPECTRUM
 
-GAMES: tuple[GameSpec, ...] = (ASSASSIN, IMPOSTER)
+GAMES: tuple[GameSpec, ...] = (
+    ASSASSIN,
+    IMPOSTER,
+    MOSTLIKELY,
+    FIFTYFIFTY,
+    SPECTRUM,
+    HEADLINES,
+)
 
 
 def get_spec(key: str) -> GameSpec:

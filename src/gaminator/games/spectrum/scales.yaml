@@ -1,0 +1,82 @@
+# Scales for Spectrum. Each has a left and a right end, up to 24 characters each. 1 is fully left, 100 is fully right.
+scales:
+  - {left: "Spare change", right: "Life savings"}
+  - {left: "Snack", right: "Feast"}
+  - {left: "Monday energy", right: "Friday energy"}
+  - {left: "Library quiet", right: "Stadium loud"}
+  - {left: "Kids' party", right: "Grown-up party"}
+  - {left: "Bad first date", right: "Great first date"}
+  - {left: "Cheap thrill", right: "Once in a lifetime"}
+  - {left: "Background noise", right: "Main event"}
+  - {left: "Beginner level", right: "Expert level"}
+  - {left: "Tiny hiccup", right: "Total disaster"}
+  - {left: "Fine to skip", right: "Never skip it"}
+  - {left: "Ancient history", right: "Brand new"}
+  - {left: "Fits in a pocket", right: "Needs a truck"}
+  - {left: "Gentle", right: "Ferocious"}
+  - {left: "Hidden shame", right: "Proud habit"}
+  - {left: "Early bird thing", right: "Night owl thing"}
+  - {left: "Introvert's dream", right: "Extrovert's dream"}
+  - {left: "Awful gift", right: "Perfect gift"}
+  - {left: "Plain", right: "Fancy"}
+  - {left: "Indoor fun", right: "Outdoor fun"}
+  - {left: "Silly", right: "Serious"}
+  - {left: "Calm", right: "Chaotic"}
+  - {left: "Ordinary job", right: "Dream job"}
+  - {left: "Terrible pet", right: "Ideal pet"}
+  - {left: "Bland", right: "Spicy"}
+  - {left: "Childish", right: "Mature"}
+  - {left: "Lazy Sunday", right: "Packed Saturday"}
+  - {left: "Cozy", right: "Uncomfortable"}
+  - {left: "Mild surprise", right: "Total shock"}
+  - {left: "Cringe", right: "Cool"}
+  - {left: "Health food", right: "Junk food"}
+  - {left: "Bargain", right: "Rip-off"}
+  - {left: "Sleepy", right: "Wide awake"}
+  - {left: "Easy chore", right: "Worst chore"}
+  - {left: "Clear skies", right: "Thunderstorm"}
+  - {left: "A toddler could", right: "Only a pro could"}
+  - {left: "Low effort", right: "Huge effort"}
+  - {left: "Teacher's pet", right: "Class clown"}
+  - {left: "Road trip anthem", right: "Elevator music"}
+  - {left: "Unknown", right: "World famous"}
+  - {left: "Packs light", right: "Packs everything"}
+  - {left: "Fragile", right: "Indestructible"}
+  - {left: "Slow", right: "Lightning fast"}
+  - {left: "Breakfast food", right: "Dinner food"}
+  - {left: "Soft", right: "Crunchy"}
+  - {left: "Short wait", right: "Endless wait"}
+  - {left: "Mild", right: "Extreme"}
+  - {left: "Sweet", right: "Savory"}
+  - {left: "Feels like a holiday", right: "Feels like work"}
+  - {left: "Tidy", right: "Messy"}
+  - {left: "Beach day", right: "Snow day"}
+  - {left: "Polite", right: "Rude"}
+  - {left: "Want seconds", right: "Can't finish it"}
+  - {left: "Sensible shoes", right: "Party shoes"}
+  - {left: "Whisper", right: "Shout"}
+  - {left: "Lucky", right: "Unlucky"}
+  - {left: "Retro", right: "Futuristic"}
+  - {left: "Small talk", right: "Deep talk"}
+  - {left: "Safe bet", right: "Wild gamble"}
+  - {left: "Background extra", right: "Lead role"}
+  - {left: "City life", right: "Country life"}
+  - {left: "Homemade", right: "Store-bought"}
+  - {left: "Undercooked", right: "Burnt"}
+  - {left: "Way too early", right: "Way too late"}
+  - {left: "Patient", right: "Impatient"}
+  - {left: "Save it", right: "Splurge"}
+  - {left: "Grandparent approved", right: "Teenager approved"}
+  - {left: "Simple", right: "Complicated"}
+  - {left: "Relaxing", right: "Exhausting"}
+  - {left: "Minor detail", right: "Big deal"}
+  - {left: "Flimsy excuse", right: "Solid excuse"}
+  - {left: "Comfort food", right: "Fine dining"}
+  - {left: "Old-fashioned", right: "Trendy"}
+  - {left: "Puddle", right: "Ocean"}
+  - {left: "Shy", right: "Bold"}
+  - {left: "Forgotten by tomorrow", right: "Remembered forever"}
+  - {left: "Fair", right: "Unfair"}
+  - {left: "Cheap hobby", right: "Costs a fortune"}
+  - {left: "Peaceful", right: "Spooky"}
+  - {left: "Party trick", right: "Real skill"}

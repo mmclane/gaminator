@@ -65,11 +65,23 @@ async def test_one_unfinished_game_per_guild_per_game(repo, db):
 
 def test_registry():
     keys = [spec.key for spec in GAMES]
-    assert keys == ["assassin", "imposter"]
+    assert keys == ["assassin", "imposter", "mostlikely", "fiftyfifty", "spectrum", "headlines"]
     assert len(set(keys)) == len(keys)
     assert get_spec("assassin").package == "gaminator.games.assassin"
     with pytest.raises(KeyError):
         get_spec("nope")
+
+
+def test_every_spec_has_card_text():
+    from dataclasses import replace
+
+    from gaminator.core.commands import games_embed
+
+    for spec in GAMES:
+        assert spec.emoji and spec.summary and spec.start_hint and spec.players
+    everything = [replace(spec, listed=True) for spec in GAMES]
+    for field in games_embed(everything, {}).fields:
+        assert len(field.value) < 1024
 
 
 def test_signup_text():

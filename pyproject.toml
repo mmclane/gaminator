@@ -15,11 +15,15 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-filterwarnings = ["ignore:'audioop' is deprecated:DeprecationWarning"]
+filterwarnings = [
+    "ignore:'audioop' is deprecated:DeprecationWarning",
+    "ignore:'count' is passed as positional argument:DeprecationWarning:discord.utils",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["thoughts"]
 
 [tool.ruff.lint]
 extend-select = ["I"]

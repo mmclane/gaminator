@@ -42,10 +42,18 @@ async def migrate(db: Database) -> None:
 SPEC = GameSpec(
     key=KEY,
     title="Assassin",
+    emoji="🗡️",
+    summary=(
+        "Everyone hunts a secret target using poison words, traps and quick reactions. "
+        "Last one standing wins."
+    ),
+    start_hint="An organizer runs `/assassin-admin create`, then players use `/assassin join`.",
+    players="3 or more; runs for days",
     extensions=(
         "gaminator.games.assassin.commands",
         "gaminator.games.assassin.events",
     ),
     make_context=make_context,
     migrate=migrate,
+    listed=False,
 )

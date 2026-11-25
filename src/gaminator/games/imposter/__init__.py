@@ -50,7 +50,14 @@ async def migrate(db: Database) -> None:
 SPEC = GameSpec(
     key=KEY,
     title="Imposter",
+    emoji="🎭",
+    summary=(
+        "Everyone gets the same secret prompt except the imposter, who has to bluff. Vote them out."
+    ),
+    start_hint="An organizer runs `/imposter-admin create`, then players use `/imposter join`.",
+    players="3 to 24; about 5 rounds",
     extensions=("gaminator.games.imposter.commands",),
     make_context=make_context,
     migrate=migrate,
+    listed=False,
 )
