@@ -204,14 +204,20 @@ async def test_headlines_subgroup():
         }
         assert len(headlines.commands) <= 25
         registered = {item.__name__ for item in bot.add_dynamic_items.call_args.args}
-        assert registered == {"LobbyButton", "AnswerButton", "WriteButton", "VoteSelect"}
+        assert registered == {
+            "LobbyButton",
+            "AnswerButton",
+            "WriteButton",
+            "BallotButton",
+            "VoteSelect",
+        }
         rounds = next(c for c in headlines.commands if c.name == "start").parameters[0]
-        assert (rounds.min_value, rounds.max_value, rounds.default) == (1, 5, 2)
+        assert (rounds.min_value, rounds.max_value, rounds.default) == (1, 5, 5)
     finally:
         await headlines_commands.teardown(bot)
     assert names(gaminator) == {"games"}
     removed = {item.__name__ for item in bot.remove_dynamic_items.call_args.args}
-    assert removed == {"LobbyButton", "AnswerButton", "WriteButton", "VoteSelect"}
+    assert removed == {"LobbyButton", "AnswerButton", "WriteButton", "BallotButton", "VoteSelect"}
 
 
 async def test_all_subgroups():

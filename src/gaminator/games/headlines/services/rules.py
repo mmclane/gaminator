@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 MIN_PLAYERS = 3
 MAX_PLAYERS = 12
-DEFAULT_ROUNDS = 2
+DEFAULT_ROUNDS = 5
 MAX_ROUNDS = 5
 ANSWER_LIMIT = 100
 HEADLINE_LIMIT = 120
@@ -29,6 +29,7 @@ OWN_HEADLINE = "You wrote that headline, so you can't vote for it. Pick another 
 EMPTY_ANSWER = "Your answer can't be empty. Press **Answer** to try again."
 EMPTY_HEADLINE = "Your headline can't be empty. Press **Write headline** to try again."
 BAD_PICK = "Pick a headline from the menu."
+NO_BALLOT = "There's nothing for you to vote on this round: the only headline is yours."
 OWES_ANSWER = "You haven't answered yet."
 OWES_HEADLINE = "You have a quote waiting for a headline."
 OWES_VOTE = "You haven't voted yet."

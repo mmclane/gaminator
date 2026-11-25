@@ -472,7 +472,7 @@ class HeadlinesRepo(BaseRepo):
     async def vote_options(self, round_id: int) -> list[aiosqlite.Row]:
         """Every pairing that has a headline, in the order it is read out."""
         return await self._all(
-            "SELECT w.id, w.position, w.headline, a.answer FROM headlines_pairings w "
+            "SELECT w.id, w.position, w.writer_id, w.headline, a.answer FROM headlines_pairings w "
             "JOIN headlines_answers a ON a.id = w.answer_id "
             "WHERE w.round_id = ? AND w.position IS NOT NULL ORDER BY w.position",
             (round_id,),

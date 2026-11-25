@@ -107,7 +107,7 @@ async def play_voted_round(hrepo, game, players, votes):
 
 async def test_create_sets_host_and_channel(hrepo, hgame):
     assert hgame["status"] == "open" and hgame["host_id"] == 11 and hgame["channel_id"] == 555
-    assert hgame["max_rounds"] == 2 and hgame["lobby_message_id"] is None
+    assert hgame["max_rounds"] == 5 and hgame["lobby_message_id"] is None
     await hrepo.set_lobby_message(hgame["id"], 777)
     await hrepo.set_host(hgame["id"], 12)
     game = await hrepo.get_game(hgame["id"])
@@ -389,6 +389,13 @@ async def test_close_writing_positions(hrepo, hgame, hrunning):
     assert [o["position"] for o in options] == [1, 2]
     assert {o["headline"] for o in options} == {"headline 11", "headline 13"}
     assert all(o["answer"].startswith("answer ") for o in options)
+    assert {o["writer_id"] for o in options} == {rows[uid]["writer_id"] for uid in (11, 13)}
+    assert all(
+        o["headline"] == rows[uid]["headline"]
+        for uid in (11, 13)
+        for o in options
+        if o["writer_id"] == rows[uid]["writer_id"]
+    )
 
 
 async def test_close_writing_needs_the_writing_step(hrepo, hgame, hrunning):

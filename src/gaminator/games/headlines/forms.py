@@ -147,7 +147,7 @@ def headline_modal(ctx) -> discord.ui.Modal:
                 min_length=1,
                 max_length=HEADLINE_LIMIT,
                 default=ctx["headline"] or None,
-                placeholder="Make it sound as bad as you can",
+                placeholder="Make it as funny as you can",
             ),
         )
     )

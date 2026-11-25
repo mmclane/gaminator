@@ -17,6 +17,7 @@ from gaminator.core.repo import GuildSettingsRepo
 from gaminator.games.headlines.context import HeadlinesContext
 from gaminator.games.headlines.repo import HeadlinesRepo
 from gaminator.games.headlines.services import game as flow
+from gaminator.games.headlines.vote import handle_ballot_click
 
 __all__ = [
     "CHANNEL_ID",
@@ -32,9 +33,11 @@ __all__ = [
     "pairings_of",
     "play_to_voting",
     "play_to_writing",
+    "press_vote",
     "reply_of",
     "select_for",
     "submit_for",
+    "view_of",
 ]
 
 QUESTIONS = [f"question {n}?" for n in range(100)]
@@ -116,8 +119,21 @@ def submit_for(bot, user_id, custom_id, input_id, value, layout="label"):
     return interaction
 
 
+def view_of(interaction):
+    """The view sent with the last reply, or None when it was text only."""
+    sent = interaction.followup.send.await_args or interaction.response.send_message.await_args
+    return sent.kwargs.get("view")
+
+
+async def press_vote(bot, user_id, round_id):
+    """Press the Vote button of a round. Returns the interaction, answered privately."""
+    interaction = interaction_for(bot, user_id)
+    await handle_ballot_click(interaction, round_id)
+    return interaction
+
+
 def select_for(bot, user_id, round_id, value):
-    """A pick from the vote menu of a round, as ``handle_vote`` gets it."""
+    """A pick from a player's private vote menu, as ``handle_vote`` gets it."""
     interaction = interaction_for(bot, user_id)
     interaction.type = discord.InteractionType.component
     interaction.data = {"custom_id": f"headlines:vote:{round_id}", "values": [value]}

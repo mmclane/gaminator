@@ -627,11 +627,12 @@ ends it.
 
 ## 9. Headlines
 
-Each round everyone privately answers their own harmless question, such as "What do you put on
-your toast?". Each answer is then handed to another player, who sees only the answer and writes
-a news headline that makes it sound as bad as possible. The bot reads the headlines out with
-their quotes, and the group votes for the best one. Any member can host a game; there is no
-organizer group.
+Each round has three steps. First everyone privately answers their own simple question, such
+as "What do you put on your toast?". Then each answer is handed to another player as a quote,
+with no question and no name, and that player writes a news headline that makes it as
+funny as possible. Last, the bot reads the headlines out with their quotes and the group votes
+for the funniest one. No player names are shown until the result. Any member can host a game;
+there is no organizer group.
 
 ### The lobby card
 
@@ -641,7 +642,7 @@ to start (3 by default). It has four buttons:
 
 - **Join** and **Leave** do the same as `/gaminator headlines join` and `leave`.
 - **Rules** shows you the rules privately.
-- **Start** works for the host or a game admin and plays 2 rounds. For 1 to 5 rounds, run
+- **Start** works for the host or a game admin and plays 5 rounds. For a shorter game, run
   `/gaminator headlines start rounds:<1-5>`.
 
 Once the game starts, Start disappears and the other buttons keep working. When the game ends,
@@ -649,37 +650,43 @@ the card shows it finished and the buttons are removed. The buttons survive a bo
 
 ### How a round plays
 
-Nobody is pinged, on any message of this game.
+Nobody is pinged, on any message of this game. Each step's message says which step it is
+("step 1 of 3, answer a question") and what to do.
 
-**Answer.** The bot posts the round with an **Answer** button. Press it to get your own
-question in a private form, and answer it in up to 100 characters. Every player gets a
-different question, and nobody else ever sees yours. You can press Answer again to change your
-answer until the step closes. The message shows how many answers are in. Answering closes when
-everyone has answered or after 90 seconds, whichever comes first.
+**Step 1: answer.** The bot posts the round with an **Answer** button. Press it to get your own
+question in a private form, and answer it honestly in a few words, up to 100 characters. Every
+player gets a different question, and nobody else ever sees yours. You can press Answer again
+to change your answer until the step closes. The message shows how many answers are in.
+Answering closes when everyone has answered or after 90 seconds, whichever comes first.
 
-**Write headline.** The bot posts a **Write headline** button. Press it to see the one quote
-you have been handed, and write a headline for it in up to 120 characters. You never get your
-own answer, and you don't see the question or who said it. You can change your headline until
-the step closes, which is when every headline is in or after 2 minutes. When two or more
-players answered, their answers are passed round among them, so each of them writes one
-headline. A player with no quote for this round is told so privately when they press the
-button.
+**Step 2: write a headline.** The bot posts a **Write headline** button. Press it to see the
+one quote you have been handed, and write a headline for it in up to 120 characters. You never
+get your own answer, and you don't see the question or who said it. The message and the form
+give an example: for the quote "I just wing it", try "Surgeon Explains Her Method". You can
+change your headline until the step closes, which is when every headline is in or after 2
+minutes. When two or more players answered, their answers are passed round among them, so each
+of them writes one headline. A player with no quote for this round is told so privately when
+they press the button.
 
 **The reveal.** The bot posts one headline at a time, a few seconds apart, in a random order.
-Each one comes with its quote and the name of the player who said it. Who wrote the headline
-stays hidden until the result. Links in answers and headlines show no preview. A round with
-only one headline shows it and skips the vote, and scores nothing.
+Each one comes with its quote and nothing else: no names are shown, neither who wrote the
+headline nor who said the quote. Both stay hidden until the result. Links in answers and
+headlines show no preview. A round with only one headline shows it and skips the vote, and
+scores nothing.
 
-**The vote.** The bot posts a menu with every headline. Pick your favorite. You can't vote for
-a headline you wrote, but you can vote for one that quotes you. Votes stay hidden until the
-result, and you can pick again to change yours until the vote closes. The message shows how
-many votes are in. The vote closes when everyone who can vote has voted or after 60 seconds.
+**Step 3: vote.** The bot posts a **Vote** button. Press it and the bot answers you privately
+with a menu of the headlines and their quotes, in the order they were read out. Your own
+headline is not on your menu, but a headline that quotes you is. Pick the funniest. Votes stay
+hidden until the result, and you can pick again to change yours until the vote closes. The
+message shows how many votes are in. The vote closes when everyone who can vote has voted or
+after 60 seconds.
 
 **The result.** The bot posts every headline with its votes, who wrote it, who was quoted and
-the points for both. While rounds remain it adds the running totals and starts the next round.
+the points for both. This is the first time any name is shown. While rounds remain it adds the
+running totals and starts the next round.
 
-A form you opened before a bot restart can still be submitted after it, and so can a vote on a
-menu posted before it. A reveal cut short by a restart carries on with the headlines not shown
+A form you opened before a bot restart can still be submitted after it. The Vote button and a
+menu you opened before a restart keep working too. A reveal cut short by a restart carries on with the headlines not shown
 yet, about half a minute later. After the last round the bot posts a recap with the winner and
 the top headline of the game.
 
@@ -698,10 +705,10 @@ log.
 
 Players can join and leave at any time, from 3 up to 12 players.
 
-- Join during a round and you are in from the next round. The buttons and the menu of the
-  current round tell you so privately.
+- Join during a round and you are in from the next round. The buttons of the current round
+  tell you so privately.
 - Leave and your answers, headlines and votes so far still count. Your answer can still be
-  handed out and shown with your name, and it still scores for you.
+  handed out and read out, and it still scores for you, with your name in the result.
 - A quote that is still unwritten when headline writing closes is dropped: it is not shown and
   not voted on. A writer who leaves and comes back before the step closes can still write it.
 - A step closes at once if everyone still in has done their part.
@@ -742,7 +749,8 @@ A question is plain text of up to 100 characters. Keep questions harmless: the f
 the headline. Entries that are empty, longer or not text are skipped with a warning in the log.
 To use your own questions, set `HEADLINES_QUESTIONS_FILE` to a YAML file in this format. A file
 that can't be read, or has no usable questions, is ignored and the built-in deck is used. A
-question is not repeated within a game unless the deck runs out.
+question is not repeated within a game unless the deck runs out. A full game of 12 players and 5
+rounds uses 60 questions, so the built-in deck never repeats one.
 `HEADLINES_ANSWER_SECONDS` changes the 90 seconds to answer (minimum 30 seconds),
 `HEADLINES_WRITE_SECONDS` changes the 2 minutes to write a headline (minimum 30 seconds), and
 `HEADLINES_VOTE_SECONDS` changes the 60 seconds to vote (minimum 20 seconds).
@@ -754,7 +762,7 @@ question is not repeated within a game unless the deck runs out.
 | `/gaminator headlines create [name]` | anyone | Opens a game in this channel and posts the lobby card. You become the host. |
 | `/gaminator headlines join` | anyone | Joins the game, before or during play. |
 | `/gaminator headlines leave` | players | Leaves the game. |
-| `/gaminator headlines start [rounds]` | host or admin | Starts the game with 2 rounds, or 1 to 5. |
+| `/gaminator headlines start [rounds]` | host or admin | Starts the game with 5 rounds, or fewer with `rounds:<1-5>`. |
 | `/gaminator headlines end` | host or admin | Ends the game and posts the recap, or cancels a lobby. |
 | `/gaminator headlines status` | anyone | Shows the players, the current step and what you still owe, privately. It never shows a question, an answer, a headline or a vote. |
 | `/gaminator headlines rules` | anyone | Shows the rules privately. |
@@ -868,7 +876,7 @@ src/gaminator/
       services/game.py                    text, the lobby card, rounds, the reveal, ending
       forms.py                            the Answer and Write headline buttons, both pop-ups
                                           and their submit handler
-      vote.py                             the vote menu
+      vote.py                             the Vote button and each player's private menu
       lobby.py                            the lobby buttons
       events.py                           the sweep, and the pop-up listener
 ```

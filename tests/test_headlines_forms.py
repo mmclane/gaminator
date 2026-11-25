@@ -1,4 +1,4 @@
-"""The Headlines step buttons, both pop-ups, the submit listener and the vote menu."""
+"""The Headlines step buttons, both pop-ups, the submit listener, the Vote button and its menu."""
 
 import logging
 import re
@@ -16,9 +16,11 @@ from headlines_fakes import (
     pairings_of,
     play_to_voting,
     play_to_writing,
+    press_vote,
     reply_of,
     select_for,
     submit_for,
+    view_of,
 )
 
 from gaminator.core.util import GameError
@@ -49,13 +51,21 @@ from gaminator.games.headlines.services.rules import (
     GAME_OVER,
     LEFT,
     NEXT_ROUND,
+    NO_BALLOT,
     NO_QUOTE,
     NOT_PLAYING,
     OWN_HEADLINE,
     VOTE_OVER,
     WRITE_OVER,
 )
-from gaminator.games.headlines.vote import VoteSelect, handle_vote, vote_view
+from gaminator.games.headlines.vote import (
+    BallotButton,
+    VoteSelect,
+    ballot_view,
+    handle_ballot_click,
+    handle_vote,
+    vote_view,
+)
 from gaminator.games.mostlikely import lobby as mostlikely_lobby
 from gaminator.games.mostlikely import vote as mostlikely_vote
 from gaminator.games.spectrum import guess as spectrum_guess
@@ -117,7 +127,7 @@ def headline_submit(bot, user_id, rnd, value, layout="label"):
 
 
 async def pick(bot, user_id, rnd, writer):
-    """Pick the headline a user wrote from the vote menu. Returns the interaction."""
+    """Pick the headline a user wrote from their vote menu. Returns the interaction."""
     target = (await pairings_of(bot, rnd))[writer]
     interaction = select_for(bot, user_id, rnd["id"], str(target["id"]))
     await handle_vote(interaction, rnd["id"], str(target["id"]))
@@ -136,6 +146,7 @@ def test_custom_ids_do_not_collide():
         "answer": forms.answer_custom_id(5),
         "write": forms.write_custom_id(5),
         "vote": vote.vote_custom_id(5),
+        "ballot": ballot_view(5).children[0].item.custom_id,
         "answerform": forms.answer_form_id(5),
         "headlineform": forms.headline_form_id(5),
     }
@@ -144,6 +155,7 @@ def test_custom_ids_do_not_collide():
         "answer": forms.ANSWER_TEMPLATE,
         "write": forms.WRITE_TEMPLATE,
         "vote": vote.VOTE_TEMPLATE,
+        "ballot": vote.BALLOT_TEMPLATE,
     }
     foreign = (
         fiftyfifty_lobby.TEMPLATE,
@@ -188,6 +200,8 @@ def test_custom_ids_do_not_collide():
     assert forms.WRITE_TEMPLATE.fullmatch("headlines:write:12")["round"] == "12"
     assert vote.VOTE_TEMPLATE.fullmatch("headlines:vote:12")["round"] == "12"
     assert vote.VOTE_TEMPLATE.fullmatch("headlines:vote:12:a") is None
+    assert vote.BALLOT_TEMPLATE.fullmatch("headlines:ballot:12")["round"] == "12"
+    assert vote.BALLOT_TEMPLATE.fullmatch("headlines:ballot:x") is None
     match = forms.SUBMIT.fullmatch("headlines:headlineform:7")
     assert match["kind"] == "headlineform" and match["round"] == "7"
     assert forms.SUBMIT.fullmatch("headlines:answerform:7")["kind"] == "answerform"
@@ -339,6 +353,7 @@ async def test_listener_ignores_other_interactions(bot):
         "fiftyfifty:blank:1",
         "headlines:answer:1",
         "headlines:vote:1",
+        "headlines:ballot:1",
         "headlines:answerform:",
         "",
         7,
@@ -686,24 +701,201 @@ async def test_vote_select_defers_first(bot):
     assert reply_of(failing) == BAD_PICK and is_private(failing)
 
 
-async def test_vote_select_rebuilds_from_message(bot):
+def options_of(interaction):
+    """The entries of the vote menu sent with the last reply, as (label, value, description)."""
+    (menu,) = view_of(interaction).children
+    assert isinstance(menu, VoteSelect)
+    return [(o.label, o.value, o.description) for o in menu.item.options]
+
+
+async def test_vote_message_has_one_vote_button(bot):
     game, rnd = await running(bot)
     rnd = await play_to_voting(bot, game)
-    (menu,) = message_of(bot, rnd["vote_message_id"]).view.children
-    assert isinstance(menu, VoteSelect)
-    assert menu.item.placeholder == "Pick the best headline"
-    assert (menu.item.min_values, menu.item.max_values) == (1, 1)
-    match = VoteSelect.__discord_ui_compiled_template__.fullmatch(menu.item.custom_id)
-    rebuilt = await VoteSelect.from_custom_id(interaction_for(bot, 11), menu.item, match)
-    assert rebuilt.round_id == rnd["id"] and rebuilt.item.custom_id == menu.item.custom_id
-    assert [o.value for o in rebuilt.item.options] == [o.value for o in menu.item.options]
-    assert [o.label for o in rebuilt.item.options] == [o.label for o in menu.item.options]
-    assert len(rebuilt.item.options) == 3
+    message = message_of(bot, rnd["vote_message_id"])
+    (button,) = message.view.children
+    assert isinstance(button, BallotButton) and button.round_id == rnd["id"]
+    assert button.item.custom_id == f"headlines:ballot:{rnd['id']}"
+    assert button.item.label == "Vote" and button.item.style is discord.ButtonStyle.primary
+    assert message.view.timeout is None
+    assert "Press **Vote**" in message.sent
+    await pick(bot, 11, rnd, 12)
+    assert "1/3 voted." in message.content
+    assert message.view.children == [button]
+    assert all("view" not in edit for edit in message.edits)
 
+
+async def test_ballot_click_sends_private_menu_without_own_headline(bot):
+    game, rnd = await running(bot, (11, 12, 13, 14))
+    rnd = await play_to_voting(bot, game)
+    before = len(bot.channel.messages)
+    by_position = {row["position"]: row for row in (await pairings_of(bot, rnd)).values()}
+    for voter in (11, 12, 13, 14):
+        click = await press_vote(bot, voter, rnd["id"])
+        click.response.defer.assert_awaited_once_with(ephemeral=True)
+        assert is_private(click) and reply_of(click) == flow.BALLOT_TEXT
+        assert reply_of(click) == (
+            "Pick the funniest headline and quote. Your own headline isn't on this list."
+        )
+        view = view_of(click)
+        (menu,) = view.children
+        assert view.timeout is None and menu.round_id == rnd["id"]
+        assert menu.item.custom_id == f"headlines:vote:{rnd['id']}"
+        assert menu.item.placeholder == "Pick the best headline"
+        assert (menu.item.min_values, menu.item.max_values) == (1, 1)
+        theirs = [n for n in (1, 2, 3, 4) if by_position[n]["writer_user_id"] != voter]
+        assert len(theirs) == 3
+        assert options_of(click) == [
+            (
+                f"{n}. {by_position[n]['headline']}",
+                str(by_position[n]["id"]),
+                by_position[n]["answer"],
+            )
+            for n in theirs
+        ]
+        own = (await pairings_of(bot, rnd))[voter]
+        assert str(own["id"]) not in [value for _, value, _ in options_of(click)]
+    assert len(bot.channel.messages) == before
+    assert await bot.repo.vote_progress(rnd["id"]) == (0, 4)
+
+
+async def test_ballot_menu_keeps_own_quote(bot):
+    game, rnd = await running(bot)
+    rnd = await play_to_voting(bot, game)
+    pairs = await pairings_of(bot, rnd)
+    writer = next(uid for uid, row in pairs.items() if row["quoted_user_id"] == 11)
+    click = await press_vote(bot, 11, rnd["id"])
+    assert str(pairs[writer]["id"]) in [value for _, value, _ in options_of(click)]
+
+
+async def test_ballot_click_only_own_headline(bot):
+    game, rnd = await running(bot)
+    rnd = await play_to_voting(bot, game)
+    own = (await pairings_of(bot, rnd))[11]
+    async with bot.repo.db.transaction() as conn:
+        await conn.execute(
+            "UPDATE headlines_pairings SET position = NULL WHERE round_id = ? AND id != ?",
+            (rnd["id"], own["id"]),
+        )
+    click = await press_vote(bot, 11, rnd["id"])
+    assert (
+        reply_of(click)
+        == NO_BALLOT
+        == ("There's nothing for you to vote on this round: the only headline is yours.")
+    )
+    assert view_of(click) is None and is_private(click)
+    other = await press_vote(bot, 12, rnd["id"])
+    assert reply_of(other) == flow.BALLOT_TEXT
+    assert [value for _, value, _ in options_of(other)] == [str(own["id"])]
+
+
+async def test_ballot_click_refusals(bot):
+    game, rnd = await running(bot, (11, 12, 13, 14))
+    await flow.join_game(bot, game, 15)
+    early = await press_vote(bot, 11, rnd["id"])
+    rnd = await play_to_writing(bot, game)
+    writing = await press_vote(bot, 11, rnd["id"])
+    rnd = await play_to_voting(bot, game)
+    await flow.leave_game(bot, game, 14)
+    outsider = await press_vote(bot, 99, rnd["id"])
+    joiner = await press_vote(bot, 15, rnd["id"])
+    leaver = await press_vote(bot, 14, rnd["id"])
+    for voter, writer in ((11, 12), (12, 11), (13, 11)):
+        await pick(bot, voter, rnd, writer)
+    assert (await bot.repo.get_round(rnd["id"]))["outcome"] == "voted"
+    closed = await press_vote(bot, 11, rnd["id"])
+    stranger_late = await press_vote(bot, 99, rnd["id"])
+    await flow.finish(bot, game)
+    over = await press_vote(bot, 11, rnd["id"])
+    missing = await press_vote(bot, 11, 9999)
+    expected = (
+        (early, VOTE_OVER),
+        (writing, VOTE_OVER),
+        (outsider, NOT_PLAYING),
+        (joiner, NEXT_ROUND),
+        (leaver, LEFT),
+        (closed, VOTE_OVER),
+        (stranger_late, VOTE_OVER),
+        (over, GAME_OVER),
+        (missing, GAME_OVER),
+    )
+    for click, text in expected:
+        assert reply_of(click) == text
+        assert view_of(click) is None and is_private(click), text
+        click.response.defer.assert_awaited_once_with(ephemeral=True)
+        click.response.send_modal.assert_not_called()
+
+
+async def test_ballot_click_defers_first_and_survives_errors(bot, monkeypatch, caplog):
+    game, rnd = await running(bot)
+    rnd = await play_to_voting(bot, game)
+    order = []
+    real = bot.repo.round_context
+
+    async def reading(*args):
+        order.append("read")
+        return await real(*args)
+
+    async def deferring(**kwargs):
+        order.append(("defer", kwargs))
+
+    click = interaction_for(bot, 11)
+    click.response.defer.side_effect = deferring
+    monkeypatch.setattr(bot.repo, "round_context", reading)
+    await handle_ballot_click(click, rnd["id"])
+    assert order[0] == ("defer", {"ephemeral": True}) and "read" in order[1:]
+    assert len(options_of(click)) == 2
+
+    failing = interaction_for(bot, 12)
+    failing.response.defer.side_effect = http_error(discord.NotFound, 404)
+    failing.response.is_done = lambda: False
+    with caplog.at_level(logging.WARNING):
+        await handle_ballot_click(failing, rnd["id"])
+    assert any("could not defer a vote press" in w for w in warnings_in(caplog))
+    assert reply_of(failing) == flow.BALLOT_TEXT and is_private(failing)
+    assert len(options_of(failing)) == 2
+
+    async def broken(*args):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(flow, "ballot_for", broken)
+    crashed = await press_vote(bot, 13, rnd["id"])
+    assert reply_of(crashed) == "Something went wrong; the logs have details."
+    assert view_of(crashed) is None and is_private(crashed)
+    assert any("vote press failed" in r.getMessage() and r.exc_info for r in caplog.records)
+
+    async def refused(*args):
+        raise GameError("Not now.")
+
+    monkeypatch.setattr(flow, "ballot_for", refused)
+    told = await press_vote(bot, 13, rnd["id"])
+    assert reply_of(told) == "Not now." and view_of(told) is None
+
+
+async def test_vote_button_and_menu_rebuild_after_restart(bot):
+    game, rnd = await running(bot)
+    rnd = await play_to_voting(bot, game)
+    (posted,) = message_of(bot, rnd["vote_message_id"]).view.children
     restarted = make_bot(bot.repo.db)
     restarted.channel = bot.channel
     restarted.get_channel = bot.get_channel
+
+    match = BallotButton.__discord_ui_compiled_template__.fullmatch(posted.item.custom_id)
+    button = await BallotButton.from_custom_id(interaction_for(restarted, 11), posted.item, match)
+    assert button.round_id == rnd["id"] and button.item.custom_id == posted.item.custom_id
+    assert button.item.label == "Vote"
+    press = interaction_for(restarted, 11)
+    await button.callback(press)
+    assert reply_of(press) == flow.BALLOT_TEXT and is_private(press)
+    (menu,) = view_of(press).children
+    assert len(menu.item.options) == 2
+
+    match = VoteSelect.__discord_ui_compiled_template__.fullmatch(menu.item.custom_id)
+    rebuilt = await VoteSelect.from_custom_id(interaction_for(restarted, 11), menu.item, match)
+    assert rebuilt.round_id == rnd["id"] and rebuilt.item.custom_id == menu.item.custom_id
+    assert [o.value for o in rebuilt.item.options] == [o.value for o in menu.item.options]
+    assert [o.label for o in rebuilt.item.options] == [o.label for o in menu.item.options]
     target = (await pairings_of(bot, rnd))[12]
+    assert str(target["id"]) in [o.value for o in rebuilt.item.options]
     click = interaction_for(restarted, 11)
     rebuilt.item._values = [str(target["id"])]
     await rebuilt.callback(click)
@@ -713,6 +905,23 @@ async def test_vote_select_rebuilds_from_message(bot):
     rebuilt.item._values = []
     await rebuilt.callback(empty)
     assert reply_of(empty) == BAD_PICK
+    assert "1/3 voted." in message_of(bot, rnd["vote_message_id"]).content
+    assert message_of(bot, rnd["vote_message_id"]).view.children == [posted]
+
+
+def test_dynamic_items_rebuild_from_bare_custom_ids():
+    for cls, custom_id in (
+        (BallotButton, "headlines:ballot:42"),
+        (VoteSelect, "headlines:vote:42"),
+    ):
+        match = cls.__discord_ui_compiled_template__.fullmatch(custom_id)
+        assert match is not None and int(match["round"]) == 42
+    assert BallotButton.__discord_ui_compiled_template__.fullmatch("headlines:vote:42") is None
+    assert VoteSelect.__discord_ui_compiled_template__.fullmatch("headlines:ballot:42") is None
+    button = BallotButton(42)
+    assert button.round_id == 42 and button.item.custom_id == "headlines:ballot:42"
+    (only,) = ballot_view(42).children
+    assert isinstance(only, BallotButton) and ballot_view(42).timeout is None
 
 
 def test_vote_view_options():

@@ -26,7 +26,7 @@ SPEC = GameSpec(
     emoji="📰",
     summary=(
         "Answer a harmless question; another player, who sees only your answer, writes the "
-        "news headline that makes it look terrible. Vote for the best pairing."
+        "news headline that makes it as funny as possible. Vote for the best pairing."
     ),
     start_hint="Anyone runs `/gaminator headlines create`.",
     players="3 to 12; about 5 minutes a round",

@@ -24,13 +24,15 @@ from gaminator.games.headlines.commands.group import require_host_or_admin
 from gaminator.games.headlines.forms import AnswerButton, WriteButton
 from gaminator.games.headlines.services import game as flow
 from gaminator.games.headlines.services.rules import (
+    DEFAULT_ROUNDS,
+    MAX_PLAYERS,
     NEXT_ROUND,
     NOT_PLAYING,
     OWES_ANSWER,
     OWES_HEADLINE,
     OWES_VOTE,
 )
-from gaminator.games.headlines.vote import VoteSelect
+from gaminator.games.headlines.vote import BallotButton
 
 FOUR = (11, 12, 13, 14)
 EARLIER = "2000-01-01T00:00:00+00:00"
@@ -38,6 +40,7 @@ STAMPS = re.compile(r"<t:[0-9]+:R>")
 DEALT = re.compile(r"question [0-9]+\?")
 PAIRING = re.compile(r"📰 \*\*([0-9]+) of ([0-9]+)\*\*")
 SKIPPED = "This round was skipped: I couldn't post the next step."
+RESULT = ": the results"
 UNVOTED = "Round 1's headlines were not voted on, so they score nothing."
 
 
@@ -107,15 +110,15 @@ def pairing_posts(bot):
 
 
 def results(bot):
-    return [m.sent for m in bot.channel.messages if "the results" in (m.sent or "")]
+    return [m.sent for m in bot.channel.messages if RESULT in (m.sent or "")]
 
 
 def vote_posts(bot):
-    return with_text(bot, "vote for the best headline")
+    return with_text(bot, flow.VOTE_STEP)
 
 
 def everything_public(bot):
-    """Every text the channel has ever shown: sent messages, edits, and menu entries."""
+    """Every text the channel has ever shown: sent messages, edits, and any menu entries."""
     seen = []
     for message in bot.channel.messages:
         seen += [message.sent or "", message.content or ""]
@@ -157,16 +160,16 @@ async def play_round(bot, game):
 
 def stop_reveal_at(monkeypatch, call, error=None):
     """Make the reveal fail when it builds its ``call``-th pairing message."""
-    real = flow.pairing_text_for
+    real = flow.pairing_text
     seen = []
 
-    async def failing(*args):
+    def failing(*args):
         seen.append(1)
         if len(seen) == call:
             raise error or RuntimeError("boom")
-        return await real(*args)
+        return real(*args)
 
-    monkeypatch.setattr(flow, "pairing_text_for", failing)
+    monkeypatch.setattr(flow, "pairing_text", failing)
 
 
 async def test_begin_game_posts_answer_step(bot):
@@ -176,7 +179,7 @@ async def test_begin_game_posts_answer_step(bot):
     rnd = await current(bot, game)
     (message,) = bot.channel.messages
     assert rnd["number"] == 1 and rnd["answer_message_id"] == message.id
-    assert message.sent.startswith("_ _\n## 📰 Round 1 of 2: answer your question\n")
+    assert message.sent.startswith("_ _\n## 📰 Round 1 of 2: step 1 of 3, answer a question\n")
     assert "0/3 answered." in message.sent
     (button,) = message.view.children
     assert isinstance(button, AnswerButton) and button.round_id == rnd["id"]
@@ -205,7 +208,7 @@ async def test_double_start_one_round(bot):
     )
     assert sum(isinstance(d, GameError) for d in done) == 1
     assert len(await rounds_of(bot, game)) == 1
-    assert len(with_text(bot, "answer your question")) == 1
+    assert len(with_text(bot, flow.ANSWER_STEP)) == 1
 
 
 async def test_progress_edits_keep_view(bot):
@@ -233,9 +236,13 @@ async def test_progress_edits_keep_view(bot):
         (await pairings_of(bot, rnd))[12]["position"], "change it until voting closes."
     )
     assert "1/3 voted." in vote_message.content
-    assert isinstance(vote_message.view.children[0], VoteSelect)
+    (button,) = vote_message.view.children
+    assert isinstance(button, BallotButton) and button.round_id == rnd["id"]
+    assert len(vote_message.edits) == 1 and "view" not in vote_message.edits[0]
+    await vote(bot, rnd, 12, 11)
+    assert "2/3 voted." in vote_message.content
+    assert vote_message.view.children == [button]
     assert all("view" not in edit for edit in vote_message.edits)
-    assert len(vote_message.view.children[0].item.options) == 3
 
 
 async def test_all_answered_opens_writing(bot):
@@ -245,7 +252,7 @@ async def test_all_answered_opens_writing(bot):
     seen = {}
 
     async def on_send(message):
-        if "write the headlines" in message.sent:
+        if flow.WRITE_STEP in message.sent:
             seen["answer_view"] = answer_message.view
             seen["answer_text"] = answer_message.content
 
@@ -254,7 +261,7 @@ async def test_all_answered_opens_writing(bot):
     assert seen["answer_view"] is not None and "answered." in seen["answer_text"]
     write_message = message_of(bot, rnd["write_message_id"])
     assert write_message is bot.channel.messages[-1]
-    assert write_message.sent.startswith("_ _\n## 📰 Round 1 of 2: write the headlines\n")
+    assert write_message.sent.startswith("_ _\n## 📰 Round 1 of 2: step 2 of 3, write a headline\n")
     assert "0/3 headlines in." in write_message.sent
     (button,) = write_message.view.children
     assert isinstance(button, WriteButton) and button.round_id == rnd["id"]
@@ -325,9 +332,11 @@ async def test_unwritten_quote_dropped(bot):
     assert pairs[13]["position"] is None and pairs[13]["shown_at"] is None
     assert len(pairing_posts(bot)) == 2
     assert all("of 2**" in post for post in pairing_posts(bot))
-    (menu,) = vote_posts(bot)[0].view.children
-    assert len(menu.item.options) == 2
-    assert f"({'U' + str(pairs[13]['quoted_user_id'])})" not in "\n".join(pairing_posts(bot))
+    (button,) = vote_posts(bot)[0].view.children
+    assert isinstance(button, BallotButton)
+    text, options = await flow.ballot_for(bot, rnd["id"], 13)
+    assert text == flow.BALLOT_TEXT and [o["position"] for o in options] == [1, 2]
+    assert pairs[13]["answer"] not in "\n".join(pairing_posts(bot))
     reply = await flow.submit_vote(bot, rnd["id"], 11, str(pairs[13]["id"]))
     assert reply == "Pick a headline from the menu."
 
@@ -394,43 +403,67 @@ async def test_all_written_reveals(bot):
     assert seen["at_intro"] is not None and seen["at_first"] is None
     assert write_message.content.endswith("\nHeadlines are closed: 3 to read.")
     intro, *posts, menu = bot.channel.messages[before:]
-    assert intro.sent == (
-        "_ _\n## 📰 Round 1 of 2: the headlines\n"
-        "3 stories tonight. The vote opens after the last one."
+    assert intro.sent == flow.reveal_intro(game, rnd, 3)
+    assert intro.sent.startswith("_ _\n## 📰 Round 1 of 2: the headlines\n3 stories tonight. ")
+    assert intro.sent.endswith(
+        " The vote opens after the last one, and names come out with the results."
     )
     assert [PAIRING.search(p.sent).groups() for p in posts] == [("1", "3"), ("2", "3"), ("3", "3")]
     by_position = {row["position"]: row for row in (await pairings_of(bot, rnd)).values()}
     for position, post in enumerate(posts, start=1):
         row = by_position[position]
-        assert post.sent == flow.pairing_text(
-            position, 3, row["headline"], row["answer"], f"U{row['quoted_user_id']}"
-        )
+        assert post.sent == flow.pairing_text(position, 3, row["headline"], row["answer"])
+        assert post.sent.endswith(f'\n> "{row["answer"]}"')
         assert post.view is None and row["shown_at"]
     assert menu.id == rnd["vote_message_id"] and "0/3 voted." in menu.sent
     assert rnd["reveal_active_at"] and rnd["eligible_voters"] == 3
-    (select,) = menu.view.children
-    assert isinstance(select, VoteSelect) and select.round_id == rnd["id"]
-    assert [o.value for o in select.item.options] == [str(by_position[n]["id"]) for n in (1, 2, 3)]
-    assert [o.label for o in select.item.options] == [
-        f"{n}. {by_position[n]['headline']}" for n in (1, 2, 3)
-    ]
-    assert [o.description for o in select.item.options] == [
-        by_position[n]["answer"] for n in (1, 2, 3)
-    ]
+    (button,) = menu.view.children
+    assert isinstance(button, BallotButton) and button.round_id == rnd["id"]
+    assert button.item.label == "Vote"
+    assert button.item.custom_id == f"headlines:ballot:{rnd['id']}"
+    assert menu.view.timeout is None
+    for voter in (11, 12, 13):
+        text, options = await flow.ballot_for(bot, rnd["id"], voter)
+        theirs = [n for n in (1, 2, 3) if by_position[n]["writer_user_id"] != voter]
+        assert text == flow.BALLOT_TEXT and len(theirs) == 2
+        assert [o["id"] for o in options] == [by_position[n]["id"] for n in theirs]
+        assert [o["headline"] for o in options] == [by_position[n]["headline"] for n in theirs]
+        assert [o["answer"] for o in options] == [by_position[n]["answer"] for n in theirs]
 
 
-async def test_reveal_hides_writer(bot):
-    game = await running(bot, FOUR)
+def reveal_messages(bot):
+    """Every message of a reveal: the intro, each headline and the vote message, edits included."""
+    found = []
+    for message in bot.channel.messages:
+        text = message.sent or ""
+        if ": the headlines\n" in text or PAIRING.search(text) or flow.VOTE_STEP in text:
+            found += [text, message.content or ""]
+            found += [edit.get("content") or "" for edit in message.edits]
+    return found
+
+
+async def test_reveal_shows_no_names(bot):
+    game = await running(bot, FOUR, rounds=1)
     rnd = await play_to_voting(bot, game)
-    by_position = {row["position"]: row for row in (await pairings_of(bot, rnd)).values()}
-    posts = pairing_posts(bot)
-    assert len(posts) == 4
-    for position, text in enumerate(posts, start=1):
-        row = by_position[position]
-        assert f"(U{row['quoted_user_id']})" in text
-        assert f"U{row['writer_user_id']}" not in text
+    assert len(pairing_posts(bot)) == 4
+    await vote(bot, rnd, 11, 12)
+    shown = reveal_messages(bot)
+    assert len(shown) == 2 + 4 * 2 + 3
+    for text in shown:
+        assert "<@" not in text, text
+        for uid in FOUR:
+            assert f"U{uid}" not in text, text
     public = everything_public(bot)
     assert "headline by **" not in public and "quote from" not in public
+    assert not any(f"U{uid}" in public for uid in FOUR)
+    for voter, writer in ((12, 11), (13, 11), (14, 11)):
+        await vote(bot, rnd, voter, writer)
+    pairs = await pairings_of(bot, rnd)
+    (result,) = results(bot)
+    for uid in FOUR:
+        assert f"headline by **U{uid}**" in result
+        assert f"quote from **U{pairs[uid]['quoted_user_id']}**" in result
+    assert not any("<@" in text or "U1" in text for text in reveal_messages(bot))
 
 
 async def test_reveal_pause(bot, monkeypatch):
@@ -471,7 +504,8 @@ async def test_reveal_failed_post_moves_on(bot):
     assert by_position[1]["shown_at"] and by_position[3]["shown_at"]
     assert by_position[2]["shown_at"] is None
     (menu,) = vote_posts(bot)
-    assert len(menu.view.children[0].item.options) == 3 and rnd["vote_deadline_at"]
+    assert isinstance(menu.view.children[0], BallotButton) and rnd["vote_deadline_at"]
+    assert [o["position"] for o in await bot.repo.vote_options(rnd["id"])] == [1, 2, 3]
 
 
 async def test_reveal_post_timeout_moves_on(bot, monkeypatch, caplog):
@@ -494,30 +528,33 @@ async def test_reveal_post_timeout_moves_on(bot, monkeypatch, caplog):
     assert len(vote_posts(bot)) == 1 and rnd["vote_deadline_at"]
 
 
-async def test_reveal_slow_name_lookup_falls_back(bot, monkeypatch, caplog):
-    game = await running(bot)
+async def test_reveal_looks_up_no_names(bot):
+    game = await running(bot, rounds=1)
     known = bot.get_user
-    bot.get_user = lambda user_id: None
+    asked = []
 
-    async def slow_fetch(user_id):
-        if user_id == 12:
-            await asyncio.sleep(5)
+    def recording(user_id):
+        asked.append(user_id)
         return known(user_id)
 
-    bot.fetch_user = slow_fetch
-    monkeypatch.setattr(flow, "REVEAL_POST_TIMEOUT", 0.05)
-    with caplog.at_level(logging.WARNING):
-        rnd = await play_to_voting(bot, game)
-    posts = "\n".join(pairing_posts(bot))
+    async def never(user_id):
+        raise AssertionError("a reveal fetched a user")
+
+    bot.get_user = recording
+    bot.fetch_user = never
+    rnd = await play_to_voting(bot, game)
+    assert asked == []
     assert len(pairing_posts(bot)) == 3 and rnd["vote_deadline_at"]
-    assert "(<@12>)" in posts and "(U11)" in posts and "(U13)" in posts
-    assert any("name lookup during a reveal timed out" in r.getMessage() for r in caplog.records)
+    assert not any("<@" in text or "U1" in text for text in reveal_messages(bot))
     assert all(m.kwargs["allowed_mentions"] is NO_MENTIONS for m in bot.channel.messages)
+    await vote_all(bot, game, rnd)
+    assert set(asked) == {11, 12, 13}
+    assert "headline by **U11**" in results(bot)[0]
 
 
 def test_reveal_stamps_stay_inside_the_stall_grace():
-    """A name lookup, a post and the longest pause, plus a second for rounding, beat the grace."""
-    longest_gap = 2 * 10 + 4 + 1
+    """A post and the longest pause, plus a second for rounding, beat the grace."""
+    longest_gap = 10 + 4 + 1
     assert flow.REVEAL_POST_TIMEOUT == 10 and longest_gap < flow.STALL_GRACE_SECONDS == 30
 
 
@@ -563,8 +600,10 @@ async def test_resume_posts_only_unshown(bot, db, monkeypatch):
     assert await flow.resume_stalled(restarted, grace=0) == 1
     first, second, menu = restarted.channel.messages
     assert [PAIRING.search(m.sent).groups() for m in (first, second)] == [("3", "4"), ("4", "4")]
-    assert "vote for the best headline" in menu.sent
-    assert len(menu.view.children[0].item.options) == 4
+    assert flow.VOTE_STEP in menu.sent
+    (button,) = menu.view.children
+    assert isinstance(button, BallotButton) and button.round_id == rnd["id"]
+    assert len(await restarted.repo.vote_options(rnd["id"])) == 4
     rnd = await restarted.repo.get_round(rnd["id"])
     assert rnd["vote_message_id"] == menu.id
     assert all(row["shown_at"] for row in (await pairings_of(restarted, rnd)).values())
@@ -578,10 +617,11 @@ async def test_one_headline_skips_vote(bot):
     rnd = await play_to_voting(bot, game, {12: "the only headline"})
     assert rnd["outcome"] == "one_headline" and rnd["vote_deadline_at"] is None
     intro, post, line, next_round = bot.channel.messages[before:]
-    assert intro.sent.endswith("\n1 story tonight.")
+    assert intro.sent == flow.reveal_intro(game, rnd, 1)
+    assert "\n1 story tonight. " in intro.sent and "The vote opens" not in intro.sent
     assert "**1 of 1**" in post.sent and "## the only headline" in post.sent
     assert line.sent == "_ _\n⏭️ A vote needs at least two headlines, so this one is just for fun."
-    assert "Round 2 of 2: answer your question" in next_round.sent
+    assert "Round 2 of 2: step 1 of 3, answer a question" in next_round.sent
     assert vote_posts(bot) == [] and results(bot) == []
     assert await bot.repo.scored_pairings(game["id"]) == []
     assert await bot.repo.game_user_ids(game["id"]) == []
@@ -610,7 +650,7 @@ async def test_previews_suppressed(bot):
     checked = 0
     for message in bot.channel.messages:
         text = message.sent or ""
-        if PAIRING.search(text) or "the results" in text or "is over after" in text:
+        if PAIRING.search(text) or RESULT in text or "is over after" in text:
             assert message.kwargs["suppress_embeds"] is True, text
             checked += 1
     assert checked == 3 + 1 + 1
@@ -639,16 +679,14 @@ async def test_everyone_voted_posts_result(bot):
     seen = {}
 
     async def on_send(message):
-        if "the results" in message.sent:
+        if RESULT in message.sent:
             seen["menu"] = vote_message.view
 
     bot.channel.on_send = on_send
     await vote_all(bot, game, rnd)
     assert seen["menu"] is not None
     assert vote_message.view is None
-    assert vote_message.content == (
-        "_ _\n## 📰 Round 1 of 2: vote for the best headline\nVoting is closed."
-    )
+    assert vote_message.content == ("_ _\n## 📰 Round 1 of 2: step 3 of 3, vote\nVoting is closed.")
     rnd = await bot.repo.get_round(rnd["id"])
     assert rnd["outcome"] == "voted" and len(results(bot)) == 1
     assert (await current(bot, game))["number"] == 2
@@ -783,6 +821,42 @@ async def test_multi_round_game(bot):
     assert f"🏆 **U11** wins with {points[0][1]} points!" in recap
 
 
+async def test_default_game_is_five_rounds(bot):
+    assert DEFAULT_ROUNDS == 5
+    game = await lobby(bot)
+    assert game["max_rounds"] == 5
+    reply = await flow.begin_game(bot, game, DEFAULT_ROUNDS)
+    assert reply == "Headlines game **Friday** has started with 3 players and 5 rounds."
+    for number in range(1, 6):
+        rnd = await current(bot, game)
+        assert rnd["number"] == number and await status(bot, game) == "active"
+        assert f"Round {number} of 5: " in message_of(bot, rnd["answer_message_id"]).sent
+        await play_round(bot, game)
+    assert await status(bot, game) == "finished"
+    assert len(results(bot)) == 5 and "Round 5 of 5: the results" in results(bot)[-1]
+    assert "Round 5 starts now." in results(bot)[3] and "starts now" not in results(bot)[4]
+    (recap,) = recaps(bot)
+    assert "is over after 5 rounds." in recap
+
+
+async def test_full_table_five_rounds_repeats_no_question(bot):
+    twelve = tuple(range(11, 11 + MAX_PLAYERS))
+    assert len(bot.games["headlines"].questions) >= MAX_PLAYERS * DEFAULT_ROUNDS == 60
+    game = await running(bot, twelve, rounds=DEFAULT_ROUNDS)
+    for _ in range(DEFAULT_ROUNDS):
+        await play_round(bot, game)
+    assert await status(bot, game) == "finished"
+    dealt = await bot.repo._all(
+        "SELECT a.question FROM headlines_answers a "
+        "JOIN headlines_rounds r ON r.id = a.round_id WHERE r.game_id = ?",
+        (game["id"],),
+    )
+    assert len(dealt) == 60 and len({row["question"] for row in dealt}) == 60
+    assert len(await bot.repo.used_questions(game["id"])) == 60
+    assert not DEALT.search(everything_public(bot))
+    assert all(len(m.sent or "") <= 2000 for m in bot.channel.messages)
+
+
 async def test_last_round_then_recap(bot):
     game = await lobby(bot)
     card = await add_card(bot, game)
@@ -896,9 +970,9 @@ async def test_end_during_voting_posts_result_before_recap(bot):
 @pytest.mark.parametrize(
     "marker, column",
     [
-        ("answer your question", "answer_message_id"),
-        ("write the headlines", "write_message_id"),
-        ("vote for the best headline", "vote_message_id"),
+        (flow.ANSWER_STEP, "answer_message_id"),
+        (flow.WRITE_STEP, "write_message_id"),
+        (flow.VOTE_STEP, "vote_message_id"),
     ],
 )
 async def test_end_racing_step_post_closes_message(bot, marker, column):
@@ -943,7 +1017,7 @@ async def test_post_retries_once(bot):
     await flow.begin_game(bot, game, 2)
     rnd = await current(bot, game)
     assert rnd["outcome"] is None and rnd["answer_message_id"] == bot.channel.messages[-1].id
-    assert len(with_text(bot, "answer your question")) == 1
+    assert len(with_text(bot, flow.ANSWER_STEP)) == 1
 
 
 async def test_answer_post_fails_twice_abandons_round(bot):
@@ -973,7 +1047,7 @@ async def test_three_abandoned_rounds_end_game(bot):
     assert [r["outcome"] for r in await rounds_of(bot, game)] == ["abandoned"] * 3
     (recap,) = recaps(bot)
     assert "is over after 0 rounds (I couldn't post in the game channel)." in recap
-    assert with_text(bot, "answer your question") == []
+    assert with_text(bot, flow.ANSWER_STEP) == []
 
 
 async def test_abandoned_round_not_idle(bot):
@@ -1108,7 +1182,7 @@ async def test_resume_stalled_after_crash_between_rounds(bot, db, monkeypatch):
     assert await flow.resume_stalled(restarted, grace=0) == 1
     assert (await current(restarted, game))["number"] == 2
     (message,) = restarted.channel.messages
-    assert "Round 2 of 2: answer your question" in message.sent
+    assert "Round 2 of 2: step 1 of 3, answer a question" in message.sent
     assert await flow.resume_stalled(restarted, grace=0) == 0
 
 
@@ -1216,7 +1290,8 @@ async def test_leavers_answer_still_handed_out(bot):
     pairs = await pairings_of(bot, rnd)
     assert {uid: row["quoted_user_id"] for uid, row in pairs.items()} == {11: 12, 12: 11, 13: 14}
     rnd = await play_to_voting(bot, game)
-    assert any('> "the leaver\'s words" (U14)' in post for post in pairing_posts(bot))
+    assert sum(post.endswith('\n> "the leaver\'s words"') for post in pairing_posts(bot)) == 1
+    assert "U14" not in "\n".join(reveal_messages(bot))
     await vote(bot, rnd, 11, 13)
     await vote(bot, rnd, 12, 13)
     await vote(bot, rnd, 13, 11)

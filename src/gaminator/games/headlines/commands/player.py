@@ -76,7 +76,7 @@ async def create(interaction: discord.Interaction, name: str | None = None):
         "**Host notes**\n"
         f"• You're in as the first player. Once at least {need} players have joined, press "
         f"**Start** for {flow.plural(DEFAULT_ROUNDS, 'round')}, or run "
-        f"`/gaminator headlines start rounds:` to play 1 to {MAX_ROUNDS}.\n"
+        "`/gaminator headlines start rounds:` to play fewer.\n"
         "• End the game at any time with `/gaminator headlines end`. If you leave, the "
         "longest-joined player becomes the host.",
     )

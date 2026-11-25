@@ -26,6 +26,7 @@ from .rules import (
     HEADLINE_LIMIT,
     MAX_PLAYERS,
     MIN_PLAYERS,
+    NO_BALLOT,
     OWN_HEADLINE,
     QUOTED_POINTS,
     VOTE_OVER,
@@ -68,6 +69,11 @@ ENDED_LINE = "The game ended."
 SKIPPED_LINE = "This round was skipped: I couldn't post the next step."
 NEXT_ROUND_REPLY = "You're in from the next round."
 BACK_IN = "You're back in."
+ANSWER_STEP = "step 1 of 3, answer a question"
+WRITE_STEP = "step 2 of 3, write a headline"
+VOTE_STEP = "step 3 of 3, vote"
+WRITE_EXAMPLE = 'Example: for the quote "I just wing it", try "Surgeon Explains Her Method".'
+BALLOT_TEXT = "Pick the funniest headline and quote. Your own headline isn't on this list."
 EMPTY_ROUNDS = {
     "no_answers": "Not enough answers came in, so round {number} is over.",
     "no_headlines": "No headlines came in, so round {number} is over.",
@@ -140,19 +146,19 @@ def how_it_works(
 ) -> str:
     if game["status"] == "open":
         length = (
-            f"A game is {plural(DEFAULT_ROUNDS, 'round')} unless the host picks more with "
+            f"A game is {plural(DEFAULT_ROUNDS, 'round')} unless the host picks fewer with "
             "`/gaminator headlines start rounds:`."
         )
     else:
         length = f"This game runs {plural(game['max_rounds'], 'round')}."
     return (
-        "• Each round everyone privately answers their own harmless question in a few words.\n"
-        "• Each answer goes to another player, who sees only the answer and writes a news "
-        "headline that makes it sound as bad as possible.\n"
-        "• The bot reads out each headline with its quote and who said it, but not who wrote "
-        "the headline.\n"
-        f"• Vote for the best one, never your own headline. Each vote is {WRITER_POINTS} "
-        f"points for the headline writer and {QUOTED_POINTS} for the player quoted.\n"
+        "• Step 1: everyone privately answers their own simple question in a few words.\n"
+        "• Step 2: your answer goes to another player as a quote, with no question and no "
+        "name. They write a news headline that makes it as funny as possible.\n"
+        "• The bot reads out each headline with its quote. Names stay hidden until the "
+        "results.\n"
+        f"• Step 3: vote for the funniest. Each vote is {WRITER_POINTS} points for the "
+        f"headline writer and {QUOTED_POINTS} for the player quoted.\n"
         f"• Answering takes up to {duration_text(answer_s)}, headlines "
         f"{duration_text(write_s)}, the vote {duration_text(vote_s)}. Each closes early once "
         "everyone is done.\n"
@@ -214,10 +220,11 @@ def round_head(game, rnd, step: str) -> str:
 
 def answer_text(game, rnd, answered: int, expected: int) -> str:
     return (
-        f"{round_head(game, rnd, 'answer your question')}\n"
-        "Press **Answer** to get your own question, privately, and answer it in up to "
-        f"{ANSWER_LIMIT} characters. Nobody else sees your question: the player who gets your "
-        "answer sees only your words.\n"
+        f"{round_head(game, rnd, ANSWER_STEP)}\n"
+        "Press **Answer**. You get a simple question that only you can see. Answer it honestly "
+        f"in a few words (up to {ANSWER_LIMIT} characters).\n"
+        "Next, another player gets your answer as a quote, without the question, and writes a "
+        "news headline that makes it as funny as possible.\n"
         f"{answered}/{expected} answered. {closes(rnd['answer_deadline_at'])}"
     )
 
@@ -229,15 +236,16 @@ def answer_closed_text(game, rnd, why: str, answered: int = 0) -> str:
         "ended": ENDED_LINE,
         "skipped": SKIPPED_LINE,
     }[why]
-    return f"{round_head(game, rnd, 'answer your question')}\n{tail}"
+    return f"{round_head(game, rnd, ANSWER_STEP)}\n{tail}"
 
 
 def write_text(game, rnd, written: int, expected: int) -> str:
     return (
-        f"{round_head(game, rnd, 'write the headlines')}\n"
-        "Press **Write headline** to see the quote you've been handed, and write a news "
-        f"headline of up to {HEADLINE_LIMIT} characters that makes it sound as bad as "
-        "possible. You won't see the question or who said it.\n"
+        f"{round_head(game, rnd, WRITE_STEP)}\n"
+        "Press **Write headline**. You get another player's answer as a quote, without the "
+        "question or their name. Write a news headline that makes the quote as funny as "
+        f"possible (up to {HEADLINE_LIMIT} characters).\n"
+        f"{WRITE_EXAMPLE}\n"
         f"{written}/{expected} headlines in. {closes(rnd['write_deadline_at'])}"
     )
 
@@ -249,7 +257,7 @@ def write_closed_text(game, rnd, why: str, written: int = 0) -> str:
         "ended": ENDED_LINE,
         "skipped": SKIPPED_LINE,
     }[why]
-    return f"{round_head(game, rnd, 'write the headlines')}\n{tail}"
+    return f"{round_head(game, rnd, WRITE_STEP)}\n{tail}"
 
 
 def empty_round_line(game, rnd, outcome: str) -> str:
@@ -258,37 +266,40 @@ def empty_round_line(game, rnd, outcome: str) -> str:
 
 
 def reveal_intro(game, rnd, count: int) -> str:
-    stories = f"{count} stor{'y' if count == 1 else 'ies'} tonight."
+    stories = (
+        f"{count} stor{'y' if count == 1 else 'ies'} tonight. A headline is written by one "
+        "player about another player's answer to a different question."
+    )
     if count > 1:
-        stories += " The vote opens after the last one."
+        stories += " The vote opens after the last one, and names come out with the results."
     return f"{round_head(game, rnd, 'the headlines')}\n{stories}"
 
 
-def pairing_text(position: int, total: int, headline: str, answer: str, quoted_name: str) -> str:
-    """One headline with its quote and who said it. The writer is never part of it."""
+def pairing_text(position: int, total: int, headline: str, answer: str) -> str:
+    """One headline with its quote. No name is part of it: those come out with the results."""
     return (
         f"{GAP}📰 **{position} of {total}**\n"
         f"## {discord.utils.escape_markdown(headline)}\n"
-        f'> "{discord.utils.escape_markdown(answer)}" ({safe(quoted_name)})'
+        f'> "{discord.utils.escape_markdown(answer)}"'
     )
 
 
 def vote_text(game, rnd, voted: int, eligible: int) -> str:
     return (
-        f"{round_head(game, rnd, 'vote for the best headline')}\n"
-        "Pick your favorite from the menu. Votes stay hidden until the result, and you can "
-        "change yours until it closes. You can't vote for a headline you wrote, but you can "
-        "vote for one that quotes you.\n"
+        f"{round_head(game, rnd, VOTE_STEP)}\n"
+        "Press **Vote** and pick the funniest headline and quote. Your own headline isn't on "
+        "your list. Votes and names stay hidden until the results, and you can change your "
+        "vote until it closes.\n"
         f"{voted}/{eligible} voted. {closes(rnd['vote_deadline_at'])}"
     )
 
 
 def vote_closed_text(game, rnd) -> str:
-    return f"{round_head(game, rnd, 'vote for the best headline')}\nVoting is closed."
+    return f"{round_head(game, rnd, VOTE_STEP)}\nVoting is closed."
 
 
 def vote_option(pairing_id: int, position: int, headline: str, answer: str):
-    """One entry of the vote menu. Discord shows its text as typed, so nothing is escaped."""
+    """One entry of a private vote menu. Discord shows its text as typed, so nothing is escaped."""
     return discord.SelectOption(
         label=cut(f"{position}. {headline}", OPTION_LIMIT),
         value=str(pairing_id),
@@ -399,7 +410,8 @@ def question_block(question: str) -> str:
     return (
         "**Your question**\n"
         f"{discord.utils.escape_markdown(question)}\n"
-        "Only you see this. The player who gets your answer sees only your words."
+        "Only you see this. Answer honestly in a few words. Another player gets your answer "
+        "as a quote, without the question, and writes a headline about it."
     )
 
 
@@ -408,8 +420,8 @@ def quote_block(quote: str) -> str:
     return (
         "**Your quote**\n"
         f'> "{discord.utils.escape_markdown(quote)}"\n'
-        "Write a news headline that makes this quote sound as bad as possible. You don't see "
-        "the question or who said it."
+        "Someone said this about something harmless. Write a news headline that makes it "
+        f"as funny as possible. {WRITE_EXAMPLE}"
     )
 
 
@@ -519,7 +531,7 @@ async def post_with_view(
 ) -> discord.Message | None:
     """Post a step message, retrying once. Raises ChannelGone when the channel is lost.
 
-    ``view`` holds the step's button or menu, or is None for a message with neither.
+    ``view`` holds the step's button, or is None for a message without one.
     """
     for attempt in (1, 2):
         try:
@@ -561,7 +573,7 @@ async def fetch_message(bot, channel_id: int | None, message_id: int | None):
 
 
 async def edit_message(bot, game, message_id: int | None, text: str) -> None:
-    """Replace a game message's text and take its button or menu away. Network errors are ignored."""
+    """Replace a game message's text and take its button away. Network errors are ignored."""
     message = await fetch_message(bot, game["channel_id"], message_id)
     if message is None:
         return
@@ -638,7 +650,7 @@ async def close_if_round_closed(bot, game, round_id: int, message_id: int, text:
     """Close a step message that went up while its round was being closed. True when it did.
 
     An ``end``, or a leave below the minimum, can run while a post is in flight. The message is
-    then edited to ``text`` with no button or menu, so nothing live sits under the recap.
+    then edited to ``text`` with no button, so nothing live sits under the recap.
     """
     rnd = await context(bot).repo.get_round(round_id)
     if rnd is not None and not rnd["closed_at"]:
@@ -715,7 +727,10 @@ async def submit_headline(bot, round_id: int, user_id: int, raw: str) -> str:
 
 
 async def submit_vote(bot, round_id: int, user_id: int, value: str) -> str:
-    """Save or change a player's vote. ``value`` is the picked menu entry. Returns their reply."""
+    """Save or change a player's vote. ``value`` is the picked menu entry. Returns their reply.
+
+    A player's menu leaves their own headline out, and a pick of it is still refused here.
+    """
     repo = context(bot).repo
     ctx = await repo.round_context(round_id, user_id)
     problem = vote_problem(ctx)
@@ -733,6 +748,22 @@ async def submit_vote(bot, round_id: int, user_id: int, value: str) -> str:
     if ctx["my_vote"] is None:
         await refresh_open_step(bot, await repo.get_game(ctx["game_id"]), round_id)
     return vote_saved_text(pairing["position"])
+
+
+async def ballot_for(bot, round_id: int, user_id: int) -> tuple[str, list]:
+    """One player's private vote menu: the text and the headlines they may vote for.
+
+    An empty list means the text is a refusal and no menu goes with it.
+    """
+    repo = context(bot).repo
+    ctx = await repo.round_context(round_id, user_id)
+    problem = vote_problem(ctx)
+    if problem:
+        return problem, []
+    options = [p for p in await repo.vote_options(round_id) if p["writer_id"] != ctx["player_id"]]
+    if not options:
+        return NO_BALLOT, []
+    return BALLOT_TEXT, options
 
 
 async def close_step_if_done(bot, round_id: int, cause: str | None = None) -> bool:
@@ -765,7 +796,7 @@ async def close_step_if_done(bot, round_id: int, cause: str | None = None) -> bo
 async def refresh_open_step(bot, game, round_id: int) -> None:
     """Update the progress line of the open step's message.
 
-    Only the text is edited, so the message keeps its button or menu.
+    Only the text is edited, so the message keeps its button.
     """
     repo = context(bot).repo
     rnd = await repo.get_round(round_id)
@@ -888,19 +919,6 @@ async def reveal_edit(bot, game, message_id: int | None, text: str) -> None:
         log.warning("headlines game %s: closing a message during a reveal timed out", game["id"])
 
 
-async def pairing_text_for(bot, game, row, total: int) -> str:
-    """One pairing's message. A name lookup that takes too long falls back to a plain mention."""
-    user_id = row["quoted_user_id"]
-    try:
-        name = await asyncio.wait_for(
-            display_name(bot, game["guild_id"], user_id), REVEAL_POST_TIMEOUT
-        )
-    except TimeoutError:
-        log.warning("headlines game %s: a name lookup during a reveal timed out", game["id"])
-        name = f"<@{user_id}>"
-    return pairing_text(row["position"], total, row["headline"], row["answer"], name)
-
-
 async def reveal_round(bot, game, rnd) -> None:
     """Read out every headline not shown yet, one message at a time, then open the vote.
 
@@ -909,9 +927,9 @@ async def reveal_round(bot, game, rnd) -> None:
     post is checked against the stored round first, so an ``end`` stops it and a second run
     posts only what is left. An error stops it without opening the vote.
 
-    Each check also stamps the round. Between two stamps lie at most one name lookup, one post
-    and one pause, each bounded, which keeps a live reveal inside the stall grace period however
-    slowly Discord answers.
+    Each check also stamps the round. Between two stamps lie at most one post or edit and one
+    pause, each bounded, which keeps a live reveal inside the stall grace period however slowly
+    Discord answers.
     """
     repo = context(bot).repo
     try:
@@ -941,7 +959,7 @@ async def reveal_round(bot, game, rnd) -> None:
             if not await repo.touch_reveal(rnd["id"]):
                 log.info("headlines game %s: reveal of round %s stopped", game["id"], rnd["id"])
                 return
-            text = await pairing_text_for(bot, game, row, len(options))
+            text = pairing_text(row["position"], len(options), row["headline"], row["answer"])
             message = await reveal_post(bot, game, text)
             if message is not None:
                 await repo.mark_shown(row["id"])
@@ -968,8 +986,11 @@ async def close_one_headline(bot, game, rnd) -> None:
 
 
 async def open_voting(bot, game, rnd) -> bool:
-    """Open the vote and post its menu. False when it did not open or the menu did not go up."""
-    from ..vote import vote_view
+    """Open the vote and post its Vote button. False when it did not open or the post failed.
+
+    The message carries no menu: each player gets their own privately when they press Vote.
+    """
+    from ..vote import ballot_view
 
     repo = context(bot).repo
     if not await repo.open_vote(rnd["id"], deadline_in(vote_seconds(bot))):
@@ -982,7 +1003,7 @@ async def open_voting(bot, game, rnd) -> bool:
         rnd["id"],
         eligible,
     )
-    view = vote_view(rnd["id"], await repo.vote_options(rnd["id"]))
+    view = ballot_view(rnd["id"])
     try:
         message = await post_with_view(bot, game, vote_text(game, rnd, voted, eligible), view)
     except ChannelGone:

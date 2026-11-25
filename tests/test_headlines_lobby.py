@@ -82,11 +82,11 @@ async def test_button_start_removes_start(bot):
     game, card = await lobby(bot)
     click = interaction_for(bot, 11)
     await handle_lobby_click(click, "start", game["id"])
-    assert "has started with 3 players and 2 rounds." in reply_of(click)
-    assert (await bot.repo.get_game(game["id"]))["max_rounds"] == 2
+    assert "has started with 3 players and 5 rounds." in reply_of(click)
+    assert (await bot.repo.get_game(game["id"]))["max_rounds"] == 5
     assert [c.item.label for c in card.view.children] == ["Join", "Leave", "Rules"]
     assert card.embed.title == "📰 Friday: in progress"
-    assert "Round 1 of 2: answer your question" in bot.channel.texts[-1]
+    assert "Round 1 of 5: step 1 of 3, answer a question" in bot.channel.texts[-1]
     again = interaction_for(bot, 11)
     await handle_lobby_click(again, "start", game["id"])
     assert reply_of(again) == "The game has already started."

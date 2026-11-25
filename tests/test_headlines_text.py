@@ -7,6 +7,9 @@ import discord
 from gaminator.games.headlines.lobby import lobby_view
 from gaminator.games.headlines.services import game as flow
 from gaminator.games.headlines.services.rules import (
+    DEFAULT_ROUNDS,
+    MAX_ROUNDS,
+    NO_BALLOT,
     OWES_ANSWER,
     OWES_HEADLINE,
     OWES_VOTE,
@@ -52,7 +55,12 @@ def test_rules_text():
     assert text.count("\n• ") == 8
     assert "100 points" in text and "25" in text
     assert "90 seconds" in text and "2 minutes" in text and "1 minute" in text
-    assert "A game is 2 rounds unless the host picks more" in text
+    assert DEFAULT_ROUNDS == MAX_ROUNDS == 5
+    assert "A game is 5 rounds unless the host picks fewer with" in text
+    assert "picks more" not in text
+    assert "• Step 1: " in text and "• Step 2: " in text and "• Step 3: " in text
+    assert "Names stay hidden until the results." in text
+    assert "who said it" not in text and "menu" not in text
     assert "fewer than 3 players" in text
     assert "from the next round" in text
     running = flow.rules_text({**GAME, "max_rounds": 4}, 90, 120, 60, 2)
@@ -63,13 +71,20 @@ def test_rules_text():
 def test_answer_text():
     text = flow.answer_text(GAME, ROUND, 0, 5)
     lines = text.split("\n")
-    assert lines[:2] == ["_ _", "## 📰 Round 1 of 2: answer your question"]
-    assert "Press **Answer**" in lines[2] and "100 characters" in lines[2]
-    assert STAMP.sub("T", lines[3]) == "0/5 answered. Closes T."
-    assert flow.answer_text(GAME, ROUND, 3, 5).split("\n")[3].startswith("3/5 answered.")
+    assert flow.ANSWER_STEP == "step 1 of 3, answer a question"
+    assert lines[:2] == ["_ _", "## 📰 Round 1 of 2: step 1 of 3, answer a question"]
+    assert lines[2].startswith("Press **Answer**. ") and "(up to 100 characters)" in lines[2]
+    assert "only you can see" in lines[2]
+    assert lines[3] == (
+        "Next, another player gets your answer as a quote, without the question, and writes a "
+        "news headline that makes it as funny as possible."
+    )
+    assert STAMP.sub("T", lines[4]) == "0/5 answered. Closes T."
+    assert len(lines) == 5
+    assert flow.answer_text(GAME, ROUND, 3, 5).split("\n")[4].startswith("3/5 answered.")
     done = flow.answer_closed_text(GAME, ROUND, "done", 5)
     assert done.split("\n")[1:] == [
-        "## 📰 Round 1 of 2: answer your question",
+        "## 📰 Round 1 of 2: step 1 of 3, answer a question",
         "Answering is closed: 5 answers in.",
     ]
     assert flow.answer_closed_text(GAME, ROUND, "done", 1).endswith("1 answer in.")
@@ -81,11 +96,20 @@ def test_answer_text():
 def test_write_text():
     text = flow.write_text(GAME, ROUND, 0, 4)
     lines = text.split("\n")
-    assert lines[:2] == ["_ _", "## 📰 Round 1 of 2: write the headlines"]
-    assert "Press **Write headline**" in lines[2] and "120 characters" in lines[2]
-    assert "You won't see the question or who said it." in lines[2]
-    assert STAMP.sub("T", lines[3]) == "0/4 headlines in. Closes T."
+    assert flow.WRITE_STEP == "step 2 of 3, write a headline"
+    assert lines[:2] == ["_ _", "## 📰 Round 1 of 2: step 2 of 3, write a headline"]
+    assert lines[2].startswith("Press **Write headline**. ")
+    assert "(up to 120 characters)" in lines[2]
+    assert "without the question or their name" in lines[2]
+    assert (
+        lines[3]
+        == flow.WRITE_EXAMPLE
+        == ('Example: for the quote "I just wing it", try "Surgeon Explains Her Method".')
+    )
+    assert STAMP.sub("T", lines[4]) == "0/4 headlines in. Closes T."
+    assert len(lines) == 5
     done = flow.write_closed_text(GAME, ROUND, "done", 4)
+    assert done.split("\n")[1] == "## 📰 Round 1 of 2: step 2 of 3, write a headline"
     assert done.endswith("\nHeadlines are closed: 4 to read.")
     assert flow.write_closed_text(GAME, ROUND, "ended").endswith("\nThe game ended.")
     skipped = flow.write_closed_text(GAME, ROUND, "skipped")
@@ -105,31 +129,48 @@ def test_empty_round_lines():
 
 
 def test_reveal_intro():
+    explained = (
+        "A headline is written by one player about another player's answer to a different question."
+    )
     assert flow.reveal_intro(GAME, ROUND, 4) == (
         "_ _\n## 📰 Round 1 of 2: the headlines\n"
-        "4 stories tonight. The vote opens after the last one."
+        f"4 stories tonight. {explained} "
+        "The vote opens after the last one, and names come out with the results."
     )
-    assert flow.reveal_intro(GAME, ROUND, 1).endswith("\n1 story tonight.")
+    assert flow.reveal_intro(GAME, ROUND, 1) == (
+        f"_ _\n## 📰 Round 1 of 2: the headlines\n1 story tonight. {explained}"
+    )
 
 
 def test_pairing_text():
-    assert flow.pairing_text(3, 5, HEADLINE, ANSWER, "Ann") == (
-        f'_ _\n📰 **3 of 5**\n## {HEADLINE}\n> "{ANSWER}" (Ann)'
-    )
+    text = flow.pairing_text(3, 5, HEADLINE, ANSWER)
+    assert text == f'_ _\n📰 **3 of 5**\n## {HEADLINE}\n> "{ANSWER}"'
+    assert "(" not in text and "<@" not in text
+    assert not hasattr(flow, "pairing_text_for")
 
 
 def test_vote_text():
     text = flow.vote_text(GAME, ROUND, 0, 5)
     lines = text.split("\n")
-    assert lines[:2] == ["_ _", "## 📰 Round 1 of 2: vote for the best headline"]
-    assert "You can't vote for a headline you wrote" in lines[2]
-    assert "you can vote for one that quotes you" in lines[2]
+    assert flow.VOTE_STEP == "step 3 of 3, vote"
+    assert lines[:2] == ["_ _", "## 📰 Round 1 of 2: step 3 of 3, vote"]
+    assert lines[2] == (
+        "Press **Vote** and pick the funniest headline and quote. Your own headline isn't on "
+        "your list. Votes and names stay hidden until the results, and you can change your "
+        "vote until it closes."
+    )
+    assert "menu" not in text
     assert STAMP.sub("T", lines[3]) == "0/5 voted. Closes T."
+    assert len(lines) == 4
     closed = flow.vote_closed_text(GAME, ROUND)
     assert closed.split("\n")[1:] == [
-        "## 📰 Round 1 of 2: vote for the best headline",
+        "## 📰 Round 1 of 2: step 3 of 3, vote",
         "Voting is closed.",
     ]
+    assert flow.BALLOT_TEXT == (
+        "Pick the funniest headline and quote. Your own headline isn't on this list."
+    )
+    assert NO_BALLOT == "There's nothing for you to vote on this round: the only headline is yours."
 
 
 def test_vote_options_capped():
@@ -215,12 +256,14 @@ def test_recap_text():
 def test_popup_blocks_and_saved_replies():
     assert flow.question_block("How do you nap?") == (
         "**Your question**\nHow do you nap?\n"
-        "Only you see this. The player who gets your answer sees only your words."
+        "Only you see this. Answer honestly in a few words. Another player gets your answer "
+        "as a quote, without the question, and writes a headline about it."
     )
     assert flow.quote_block(ANSWER) == (
         f'**Your quote**\n> "{ANSWER}"\n'
-        "Write a news headline that makes this quote sound as bad as possible. "
-        "You don't see the question or who said it."
+        "Someone said this about something harmless. Write a news headline that makes it "
+        'as funny as possible. Example: for the quote "I just wing it", try '
+        '"Surgeon Explains Her Method".'
     )
     assert flow.answer_saved_text(ANSWER) == (
         f'Saved. Your answer: "{ANSWER}". You can change it until answering closes.'
@@ -286,7 +329,7 @@ def channel_messages(headline=HEADLINE, answer=ANSWER, name="Ann"):
         "write closed": flow.write_closed_text(GAME, ROUND, "done", 4),
         "empty": flow.empty_round_line(GAME, ROUND, "no_answers"),
         "intro": flow.reveal_intro(GAME, ROUND, 4),
-        "pairing": flow.pairing_text(1, 2, headline, answer, name),
+        "pairing": flow.pairing_text(1, 2, headline, answer),
         "vote": flow.vote_text(GAME, ROUND, 0, 5),
         "vote closed": flow.vote_closed_text(GAME, ROUND),
         "result": "\n".join(flow.result_messages(GAME, ROUND, rows, names, points)),
@@ -306,7 +349,7 @@ def test_user_text_escaped():
     assert esc(NASTY) in built["pairing"]
     assert built["pairing"].count(esc(NASTY)) == 2
     assert esc(NASTY) in built["recap"] and esc(NASTY[:40]) in built["result"]
-    for key in ("pairing", "result", "recap", "join", "leave", "host", "standings"):
+    for key in ("result", "recap", "join", "leave", "host", "standings"):
         assert NASTY_NAME not in built[key], key
         assert esc(NASTY_NAME) in built[key], key
     for text in (
@@ -322,6 +365,17 @@ def test_user_text_escaped():
         assert esc(NASTY) in text or esc(NASTY_NAME) in text
     embed = flow.lobby_embed({**OPEN, "name": NASTY}, [NASTY_NAME], NASTY_NAME, 3)
     assert NASTY not in embed.title and NASTY_NAME not in embed.description
+
+
+def test_names_only_in_results_and_roster_lines():
+    built = channel_messages(name="Zebedee")
+    hidden = ("answer", "answer closed", "write", "write closed", "empty", "intro", "pairing")
+    for key in (*hidden, "vote", "vote closed"):
+        assert "Zebedee" not in built[key] and "Bo" not in built[key], key
+        assert "<@" not in built[key], key
+    for key in ("result", "recap", "join", "leave", "host", "standings"):
+        assert "Zebedee" in built[key], key
+    assert "headline by **Bo**" in built["result"] and "quote from **Zebedee**" in built["result"]
 
 
 def test_channel_messages_start_with_gap():
@@ -345,10 +399,18 @@ def test_messages_fit_2000():
     headline, answer = "*" * 120, "*" * 100
     rows = [row(n, 11, n, n % 12 + 1, headline, answer) for n in range(1, 13)]
     points = [(n, 1375) for n in range(1, 13)]
-    assert len(flow.pairing_text(12, 12, headline, answer, name)) <= 539
-    assert len(flow.answer_text(GAME, ROUND, 12, 12)) <= 400
-    assert len(flow.write_text(GAME, ROUND, 12, 12)) <= 400
-    assert len(flow.vote_text(GAME, ROUND, 12, 12)) <= 400
+    assert len(flow.pairing_text(12, 12, headline, answer)) <= 470
+    last_game, last_round = {**GAME, "max_rounds": 5}, {**ROUND, "number": 5}
+    assert len(flow.answer_text(last_game, last_round, 12, 12)) <= 400
+    assert len(flow.write_text(last_game, last_round, 12, 12)) <= 400
+    assert len(flow.vote_text(last_game, last_round, 12, 12)) <= 400
+    assert len(flow.reveal_intro(last_game, last_round, 12)) <= 400
+    assert len(flow.question_block("*" * 100)) <= 400
+    assert len(flow.quote_block(answer)) <= 450
+    assert len(flow.BALLOT_TEXT) <= 2000 and len(NO_BALLOT) <= 2000
+    assert len(flow.rules_text(OPEN, 3601, 3601, 3601, 12)) <= 2000
+    built = channel_messages(headline, answer, name)
+    assert all(len(text) <= 2000 for key, text in built.items() if key != "result"), built
     parts = flow.result_messages(GAME, ROUND, rows, names, points)
     assert 1 < len(parts) <= 3 and all(len(part) <= 1900 for part in parts)
     assert sum(part.count("headline by") for part in parts) == 12
@@ -370,6 +432,11 @@ def test_lobby_embed():
     assert field.name == "How it works" and field.value == flow.how_it_works(OPEN, 90, 120, 60, 3)
     assert len(field.value) < 1024
     assert len(flow.how_it_works({**GAME, "max_rounds": 5}, 3600, 3601, 3602, 12)) < 1024
+    slow = (86399, 86399, 86399, 12)
+    for game in (OPEN, {**GAME, "max_rounds": 5}, {**GAME, "max_rounds": 1}):
+        assert len(flow.how_it_works(game, *slow)) <= 1024, game
+        assert len(flow.lobby_embed(game, ["Ann"], "Ann", 12, *slow[:3]).fields[0].value) <= 1024
+    assert "A game is 5 rounds unless the host picks fewer" in field.value
     ready = flow.lobby_embed(OPEN, ["Ann", "Bo", "Cy"], "Ann", 3)
     assert "Enough to start!" in ready.description
     running = flow.lobby_embed(GAME, ["Ann", "Bo", "Cy"], "Ann", 3)

@@ -1,4 +1,4 @@
-"""The vote menu. Its custom_id carries the round id, so it survives a restart."""
+"""The Vote button and each player's private vote menu. Their ids carry the round id."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from .services import game as flow
 
 log = logging.getLogger(__name__)
 VOTE_TEMPLATE = re.compile(r"headlines:vote:(?P<round>[0-9]+)")
+BALLOT_TEMPLATE = re.compile(r"headlines:ballot:(?P<round>[0-9]+)")
 VOTE_PLACEHOLDER = "Pick the best headline"
 
 
@@ -44,10 +45,62 @@ class VoteSelect(discord.ui.DynamicItem[discord.ui.Select], template=VOTE_TEMPLA
         await handle_vote(interaction, self.round_id, values[0] if values else "")
 
 
-def vote_view(round_id: int, pairings) -> discord.ui.View:
-    """The vote menu with one entry per headline, in the order they were read out.
+class BallotButton(discord.ui.DynamicItem[discord.ui.Button], template=BALLOT_TEMPLATE):
+    def __init__(self, round_id: int):
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"headlines:ballot:{round_id}",
+                label="Vote",
+                emoji="🗳️",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+        self.round_id = round_id
 
-    ``pairings`` holds the repo's vote_options rows.
+    @classmethod
+    async def from_custom_id(
+        cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str], /
+    ):
+        return cls(int(match["round"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await handle_ballot_click(interaction, self.round_id)
+
+
+def ballot_view(round_id: int) -> discord.ui.View:
+    """The public vote message's one button."""
+    view = discord.ui.View(timeout=None)
+    view.add_item(BallotButton(round_id))
+    return view
+
+
+async def handle_ballot_click(interaction: discord.Interaction, round_id: int) -> None:
+    """Answer a Vote press privately with the menu of headlines this player may vote for."""
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except NETWORK_ERRORS as e:
+        log.warning("headlines: could not defer a vote press: %s", e)
+    pairings: list = []
+    try:
+        text, pairings = await flow.ballot_for(interaction.client, round_id, interaction.user.id)
+    except GameError as e:
+        text = describe_error(e) or "That didn't work."
+    except Exception:
+        log.exception("headlines: vote press failed for round %s", round_id)
+        text = "Something went wrong; the logs have details."
+    try:
+        if pairings:
+            await respond(interaction, text, view=vote_view(round_id, pairings))
+        else:
+            await respond(interaction, text)
+    except NETWORK_ERRORS as e:
+        log.warning("headlines: could not answer a vote press: %s", e)
+
+
+def vote_view(round_id: int, pairings) -> discord.ui.View:
+    """One player's private vote menu, in the order the headlines were read out.
+
+    ``pairings`` holds the repo's vote_options rows this player may vote for.
     """
     options = [
         flow.vote_option(p["id"], p["position"], p["headline"], p["answer"]) for p in pairings
